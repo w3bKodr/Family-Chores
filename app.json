@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "Family Chores",
+    "slug": "family-chores",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.familychores.app",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Allow Family Chores to access your local network for syncing",
+        "NSBonjourServiceTypes": [
+          "_http._tcp",
+          "_ws._tcp"
+        ],
+        "NSUserTrackingUsageDescription": "Allow Family Chores to track your activity for analytics"
+      }
+    },
+    "android": {
+      "package": "com.familychores.app",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "familychores",
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "familychores://"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

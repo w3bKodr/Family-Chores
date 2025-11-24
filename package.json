@@ -1,0 +1,52 @@
+{
+  "name": "family-chores",
+  "version": "1.0.0",
+  "description": "A complete family chore tracking app for iOS with Expo, React Native, and Supabase",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "eas-build": "eas build --platform ios",
+    "eas-submit": "eas submit --platform ios"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "latest",
+    "@supabase/supabase-js": "latest",
+    "axios": "latest",
+    "clsx": "latest",
+    "expo": "latest",
+    "expo-constants": "latest",
+    "expo-device": "latest",
+    "expo-notifications": "latest",
+    "expo-router": "latest",
+    "expo-secure-store": "latest",
+    "expo-splash-screen": "latest",
+    "expo-status-bar": "latest",
+    "nativewind": "latest",
+    "react": "latest",
+    "react-native": "latest",
+    "react-native-gesture-handler": "latest",
+    "react-native-reanimated": "latest",
+    "react-native-safe-area-context": "latest",
+    "react-native-screens": "latest",
+    "react-native-svg": "latest",
+    "react-native-web": "^0.21.0",
+    "tailwindcss": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "dotenv": "^17.2.3",
+    "eslint": "latest",
+    "eslint-config-prettier": "latest",
+    "typescript": "latest"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
