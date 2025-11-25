@@ -7,6 +7,8 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
@@ -14,7 +16,7 @@ import { useFamilyStore } from '@lib/store/familyStore';
 import { supabase } from '@lib/supabase/client';
 import { Button } from '@components/Button';
 import { AlertModal } from '@components/AlertModal';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function ParentDashboard() {
   const router = useRouter();
@@ -26,6 +28,9 @@ export default function ParentDashboard() {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
   const [pendingRequest, setPendingRequest] = useState<any>(null);
+  
+  // Animation for star badge bounce
+  const starBounceAnim = useState(new Animated.Value(0))[0];
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -33,6 +38,26 @@ export default function ParentDashboard() {
     setAlertType(type);
     setAlertVisible(true);
   };
+
+  useEffect(() => {
+    // Trigger star bounce animation on mount
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(starBounceAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(starBounceAnim, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [starBounceAnim]);
 
   useEffect(() => {
     if (user?.family_id) {
@@ -195,139 +220,267 @@ export default function ParentDashboard() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
+        scrollEventThrottle={16}
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.headerTitle}>Dashboard</Text>
-            <Text style={styles.headerSubtitle}>Welcome back, {user?.display_name}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push('/(app)/parent/pending-requests')}
-            style={styles.notificationButton}
-          >
-            <Ionicons name="notifications-outline" size={20} color="#374151" />
-            { (parentJoinRequests?.length || 0) + (joinRequests?.length || 0) > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>{(parentJoinRequests?.length || 0) + (joinRequests?.length || 0)}</Text>
+        {/* Premium Header with Gradient Background */}
+        <View style={styles.premiumHeader}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.headerTitle}>Hello, {user?.display_name?.split(' ')[0] || 'Parent'}!</Text>
+              <Text style={styles.headerSubtitle}>Let's manage your family today</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/parent/pending-requests')}
+              style={styles.premiumNotificationButton}
+            >
+              <View style={styles.notificationGlow}>
+                <Ionicons name="notifications" size={22} color="#FFFFFF" />
               </View>
-            ) }
-          </TouchableOpacity>
+              { (parentJoinRequests?.length || 0) + (joinRequests?.length || 0) > 0 && (
+                <View style={styles.premiumNotificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{(parentJoinRequests?.length || 0) + (joinRequests?.length || 0)}</Text>
+                </View>
+              ) }
+            </TouchableOpacity>
+          </View>
         </View>
 
         {family && (
-          <View style={styles.familyPanel}>
-            <View style={styles.familyPanelHeader}>
-              <Text style={styles.familyPanelTitle}>Chore Tracker</Text>
-              <Text style={styles.familyPanelSubtitle}>
-                {children.length} {children.length === 1 ? 'child' : 'children'}
-              </Text>
+          <View style={styles.contentContainer}>
+            {/* Premium Chore Tracker Card */}
+            <View style={styles.premiumTrackerCard}>
+              <View style={styles.trackerHeader}>
+                <View>
+                  <Text style={styles.trackerTitle}>Chore Tracker</Text>
+                  <Text style={styles.trackerSubtitle}>
+                    {children.length} {children.length === 1 ? 'child' : 'children'} • {family.name}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Children Section with Premium Cards */}
+              <View style={styles.childrenSection}>
+                {children.length === 0 ? (
+                  <View style={styles.emptyChildrenCard}>
+                    <Text style={styles.emptyChildrenEmoji}>👶</Text>
+                    <Text style={styles.emptyChildrenText}>No children yet</Text>
+                    <Text style={styles.emptyChildrenSubtext}>Let's add your first child to get started</Text>
+                    <Button
+                      title="+ Add Child"
+                      onPress={() => router.push('/(app)/family/manage')}
+                      variant="primary"
+                      size="sm"
+                      style={{ marginTop: 16 }}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.childrenGrid}>
+                    {children.map((child) => {
+                      const pendingCount = getPendingCountForChild(child.id);
+                      return (
+                        <TouchableOpacity
+                          key={child.id}
+                          style={styles.premiumChildCard}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/(app)/parent/child-detail',
+                              params: { childId: child.id },
+                            })
+                          }
+                          activeOpacity={0.85}
+                        >
+                          <View style={styles.childCardContent}>
+                            {/* Avatar with Glow */}
+                            <View style={styles.childAvatarGlow}>
+                              <View style={styles.premiumChildAvatar}>
+                                <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
+                              </View>
+                              {pendingCount > 0 && (
+                                <Animated.View 
+                                  style={[
+                                    styles.premiumPendingBadge,
+                                    {
+                                      transform: [
+                                        {
+                                          scale: starBounceAnim.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [1, 1.15],
+                                          }),
+                                        },
+                                      ],
+                                    },
+                                  ]}
+                                >
+                                  <Text style={styles.premiumPendingBadgeText}>{pendingCount}</Text>
+                                </Animated.View>
+                              )}
+                            </View>
+                            <View style={styles.childCardDetails}>
+                              <Text style={styles.premiumChildName}>{child.display_name}</Text>
+                              <View style={styles.premiumStarBadge}>
+                                <Animated.Text 
+                                  style={[
+                                    styles.starText,
+                                    {
+                                      transform: [
+                                        {
+                                          scale: starBounceAnim.interpolate({
+                                            inputRange: [0, 0.5, 1],
+                                            outputRange: [1, 1.2, 1],
+                                          }),
+                                        },
+                                      ],
+                                    },
+                                  ]}
+                                >
+                                  ✨
+                                </Animated.Text>
+                                <Text style={styles.premiumPointsText}>{child.points}</Text>
+                              </View>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
             </View>
 
-            {/* Children Section */}
-            <View style={styles.childrenSection}>
-              {children.length === 0 ? (
-                <View style={styles.emptyChildrenCard}>
-                  <Text style={styles.emptyChildrenEmoji}>👶</Text>
-                  <Text style={styles.emptyChildrenText}>No children yet</Text>
-                  <Button
-                    title="+ Add Child"
-                    onPress={() => router.push('/(app)/family/manage')}
-                    variant="primary"
-                    size="sm"
-                  />
+            {/* Quick Actions - Floating Style Premium Cards */}
+            <View style={styles.quickActionsSection}>
+              <Text style={styles.sectionTitlePremium}>Quick Actions</Text>
+              <View style={styles.floatingActionsGrid}>
+                {/* New Chore - Vibrant Green */}
+                <TouchableOpacity 
+                  onPress={() => router.push('/(app)/parent/create-chore')}
+                  style={[styles.floatingActionCard, styles.floatingActionGreen]}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.floatingActionIconWrapper}>
+                    <MaterialCommunityIcons name="plus-circle" size={44} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.floatingActionTitle}>New Chore</Text>
+                  <Text style={styles.floatingActionSubtitle}>Create a task</Text>
+                </TouchableOpacity>
+
+                {/* Rewards - Vibrant Purple */}
+                <TouchableOpacity 
+                  onPress={() => router.push('/(app)/parent/rewards')}
+                  style={[styles.floatingActionCard, styles.floatingActionPurple]}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.floatingActionIconWrapper}>
+                    <MaterialCommunityIcons name="gift-open" size={44} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.floatingActionTitle}>Rewards</Text>
+                  <Text style={styles.floatingActionSubtitle}>Manage rewards</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Premium Full-Width Action Tiles */}
+            <View style={styles.premiumTilesSection}>
+              {/* Weekly Schedule Tile */}
+              <TouchableOpacity 
+                onPress={() => router.push('/(app)/parent/weekly-view')}
+                style={[styles.premiumWideTile, styles.premiumTileOrange]}
+                activeOpacity={0.85}
+              >
+                <View style={styles.premiumTileIcon}>
+                  <MaterialCommunityIcons name="calendar-week" size={40} color="#FFFFFF" />
                 </View>
-              ) : (
-                <View style={styles.childrenGrid}>
-                  {children.map((child) => {
-                    const pendingCount = getPendingCountForChild(child.id);
-                    return (
-                      <TouchableOpacity
-                        key={child.id}
-                        style={styles.childGridCard}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/(app)/parent/child-detail',
-                            params: { childId: child.id },
-                          })
-                        }
-                      >
-                        <View style={styles.childAvatarContainer}>
-                          <View style={styles.childAvatar}>
-                            <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
-                          </View>
-                          {pendingCount > 0 && (
-                            <View style={styles.pendingBadge}>
-                              <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.childGridName}>{child.display_name}</Text>
-                        <View style={styles.childPointsBadge}>
-                          <Text style={styles.childPointsText}>⭐ {child.points}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                <View style={styles.premiumTileContent}>
+                  <Text style={styles.premiumTileTitle}>Weekly Schedule</Text>
+                  <Text style={styles.premiumTileSubtitle}>View all chores for the week</Text>
                 </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" style={{ opacity: 0.8 }} />
+              </TouchableOpacity>
+
+              {/* Switch to Child Mode Tile */}
+              {children.length > 0 && (
+                <TouchableOpacity 
+                  onPress={() => router.push('/(app)/parent/switch-to-child')}
+                  style={[styles.premiumWideTile, styles.premiumTileBlue]}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.premiumTileIcon}>
+                    <MaterialCommunityIcons name="account-switch" size={40} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.premiumTileContent}>
+                    <Text style={styles.premiumTileTitle}>Switch to Child Mode</Text>
+                    <Text style={styles.premiumTileSubtitle}>View and complete chores as your child</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" style={{ opacity: 0.8 }} />
+                </TouchableOpacity>
               )}
             </View>
           </View>
         )}
 
-        <View style={styles.actionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <TouchableOpacity 
-              onPress={() => router.push('/(app)/parent/create-chore')}
-              style={styles.actionCard}
-            >
-              <View style={[styles.actionIconCircle, styles.actionGreen]}>
-                <Text style={styles.actionEmoji}>➕</Text>
+        {!family && !user?.family_id && (
+          <View style={styles.contentContainer}>
+            <View style={styles.premiumEmptyState}>
+              <View style={styles.emptyStateIcon}>
+                <Text style={styles.emptyStateIconText}>👨‍👩‍👧</Text>
               </View>
-              <Text style={styles.actionTitle}>New Chore</Text>
-            </TouchableOpacity>
+              <Text style={styles.emptyStateTitle}>Family Chores</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                {pendingRequest 
+                  ? 'Your join request is pending approval' 
+                  : 'Create a new family or join an existing one'}
+              </Text>
 
-            <TouchableOpacity 
-              onPress={() => router.push('/(app)/parent/rewards')}
-              style={styles.actionCard}
-            >
-              <View style={[styles.actionIconCircle, styles.actionPurple]}>
-                <Text style={styles.actionEmoji}>🎁</Text>
-              </View>
-              <Text style={styles.actionTitle}>Rewards</Text>
-            </TouchableOpacity>
+              {pendingRequest ? (
+                <View style={styles.premiumPendingRequestCard}>
+                  <View style={styles.pendingRequestIconWrapper}>
+                    <Text style={styles.pendingRequestIcon}>⏳</Text>
+                  </View>
+                  <Text style={styles.pendingRequestTitle}>Request Pending</Text>
+                  <Text style={styles.pendingRequestMessage}>
+                    You've requested to join <Text style={styles.pendingRequestFamilyName}>{pendingRequest.families?.name}</Text>
+                  </Text>
+                  <Text style={styles.pendingRequestSubtext}>
+                    Waiting for the family owner to approve your request. You'll be notified once approved.
+                  </Text>
+                  <Button
+                    title="Cancel Request"
+                    onPress={handleCancelRequest}
+                    variant="outline"
+                    size="lg"
+                    style={{ marginTop: 24 }}
+                  />
+                </View>
+              ) : (
+                <View style={styles.emptyOptionsContainer}>
+                  <TouchableOpacity
+                    style={[styles.emptyOptionCard, styles.emptyOptionCreate]}
+                    onPress={() => router.push('/(app)/parent/create-family')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.emptyOptionIconWrapper}>
+                      <MaterialCommunityIcons name="plus-circle" size={40} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.emptyOptionTitle}>Create Family</Text>
+                    <Text style={styles.emptyOptionDescription}>Start a new family and invite members</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.emptyOptionCard, styles.emptyOptionJoin]}
+                    onPress={() => router.push('/(app)/parent/join-family')}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.emptyOptionIconWrapper}>
+                      <MaterialCommunityIcons name="home-import-outline" size={40} color="#FFFFFF" />
+                    </View>
+                    <Text style={styles.emptyOptionTitle}>Join Family</Text>
+                    <Text style={styles.emptyOptionDescription}>Enter a family code to join</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
-
-          {/* Pending Requests card removed — notification bell in the header replaces it */}
-
-          <TouchableOpacity 
-            onPress={() => router.push('/(app)/parent/weekly-view')}
-            style={styles.wideActionCard}
-          >
-            <View style={[styles.actionIconCircle, styles.actionOrange]}>
-              <Text style={styles.actionEmoji}>📅</Text>
-            </View>
-            <View style={styles.wideActionContent}>
-              <Text style={styles.wideActionTitle}>Weekly Schedule</Text>
-              <Text style={styles.wideActionSubtitle}>View all chores for the week</Text>
-            </View>
-          </TouchableOpacity>
-
-          {children.length > 0 && (
-            <TouchableOpacity 
-              onPress={() => router.push('/(app)/parent/switch-to-child')}
-              style={styles.wideActionCard}
-            >
-              <View style={[styles.actionIconCircle, styles.actionBlue]}>
-                <Text style={styles.actionEmoji}>🔄</Text>
-              </View>
-              <View style={styles.wideActionContent}>
-                <Text style={styles.wideActionTitle}>Switch to Child Mode</Text>
-                <Text style={styles.wideActionSubtitle}>View and complete chores as your child</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
       </ScrollView>
 
       <AlertModal
@@ -344,7 +497,7 @@ export default function ParentDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F3', // Warm off-white background
   },
   scroll: {
     flex: 1,
@@ -352,6 +505,493 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
+
+  // ===== PREMIUM HEADER =====
+  premiumHeader: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontWeight: '500',
+  },
+  premiumNotificationButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  notificationGlow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumNotificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  // ===== CONTENT CONTAINER =====
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+  },
+
+  // ===== PREMIUM TRACKER CARD =====
+  premiumTrackerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  trackerHeader: {
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  trackerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  trackerSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+
+  // ===== PREMIUM CHILD CARDS =====
+  childrenSection: {
+    marginTop: 0,
+  },
+  childrenGrid: {
+    gap: 12,
+  },
+  premiumChildCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  childCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  childAvatarGlow: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  premiumChildAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  childAvatarEmoji: {
+    fontSize: 36,
+  },
+  premiumPendingBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#FF3B30',
+    borderRadius: 14,
+    minWidth: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  premiumPendingBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  childCardDetails: {
+    flex: 1,
+  },
+  premiumChildName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  premiumStarBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    width: 'auto',
+    alignSelf: 'flex-start',
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  starText: {
+    fontSize: 18,
+  },
+  premiumPointsText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+
+  // ===== EMPTY CHILDREN CARD =====
+  emptyChildrenCard: {
+    padding: 32,
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  emptyChildrenEmoji: {
+    fontSize: 56,
+    marginBottom: 16,
+  },
+  emptyChildrenText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  emptyChildrenSubtext: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+
+  // ===== FLOATING ACTIONS SECTION =====
+  quickActionsSection: {
+    marginBottom: 32,
+  },
+  sectionTitlePremium: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 16,
+    letterSpacing: -0.5,
+  },
+  floatingActionsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  floatingActionCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  floatingActionGreen: {
+    backgroundColor: '#10B981',
+  },
+  floatingActionPurple: {
+    backgroundColor: '#8B5CF6',
+  },
+  floatingActionIconWrapper: {
+    marginBottom: 12,
+  },
+  floatingActionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  floatingActionSubtitle: {
+    fontSize: 11,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '400',
+    opacity: 0.9,
+  },
+
+  // ===== PREMIUM TILES SECTION =====
+  premiumTilesSection: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  premiumWideTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  premiumTileOrange: {
+    backgroundColor: '#F97316',
+  },
+  premiumTileBlue: {
+    backgroundColor: '#0EA5E9',
+  },
+  premiumTileIcon: {
+    marginRight: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumTileContent: {
+    flex: 1,
+  },
+  premiumTileTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  premiumTileSubtitle: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '400',
+    opacity: 0.9,
+  },
+
+  // ===== EMPTY STATE =====
+  premiumEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FFE5E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  emptyStateIconText: {
+    fontSize: 52,
+  },
+  emptyStateTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+
+  // ===== EMPTY OPTIONS =====
+  emptyOptionsContainer: {
+    gap: 16,
+    width: '100%',
+  },
+  emptyOptionCard: {
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  emptyOptionCreate: {
+    backgroundColor: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+  },
+  emptyOptionJoin: {
+    backgroundColor: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+  },
+  emptyOptionIconWrapper: {
+    marginBottom: 16,
+  },
+  emptyOptionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyOptionDescription: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+
+  // ===== PENDING REQUEST =====
+  premiumPendingRequestCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FCD34D',
+    width: '100%',
+    shadowColor: '#FCD34D',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+    marginTop: 24,
+  },
+  pendingRequestIconWrapper: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pendingRequestIcon: {
+    fontSize: 48,
+  },
+  pendingRequestTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#92400E',
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  pendingRequestMessage: {
+    fontSize: 16,
+    color: '#78350F',
+    textAlign: 'center',
+    marginBottom: 12,
+    lineHeight: 24,
+  },
+  pendingRequestFamilyName: {
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  pendingRequestSubtext: {
+    fontSize: 14,
+    color: '#92400E',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+
+  // ===== LEGACY STYLES (kept for compatibility) =====
   emptyScrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -437,15 +1077,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     marginBottom: 24,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
   profileButton: {
     width: 40,
     height: 40,
@@ -477,11 +1108,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  notificationBadgeText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
   familyPanel: {
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
@@ -512,32 +1138,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  childrenSection: {
-    marginTop: 0,
-  },
-  emptyChildrenCard: {
-    padding: 32,
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  emptyChildrenEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyChildrenText: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  childrenGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
   childGridCard: {
     width: '31%',
     backgroundColor: '#F9FAFB',
@@ -558,9 +1158,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  childAvatarEmoji: {
-    fontSize: 32,
   },
   pendingBadge: {
     position: 'absolute',
@@ -689,10 +1286,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: '#F3F4F6',
-  },
-  childCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   childIcon: {
     width: 48,
@@ -875,5 +1468,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  // Legacy compatibility styles end here
 });
 
