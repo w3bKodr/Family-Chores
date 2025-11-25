@@ -23,10 +23,9 @@ import { AlertModal } from '@components/AlertModal';
 
 export default function ManageFamilyScreen() {
   const router = useRouter();
-  const { family, children, joinRequests, parentJoinRequests, getJoinRequests, getChildren, approveJoinRequest, rejectJoinRequest, getParentJoinRequests, approveParentJoinRequest, rejectParentJoinRequest, generateFamilyCode, setFamily } = useFamilyStore();
+  const { family, children, joinRequests, parentJoinRequests, getJoinRequests, getChildren, approveJoinRequest, rejectJoinRequest, getParentJoinRequests, approveParentJoinRequest, rejectParentJoinRequest, generateFamilyCode, setFamily, parents, getParents } = useFamilyStore();
   const { user, setUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [parents, setParents] = useState<any[]>([]);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showRemoveParentConfirm, setShowRemoveParentConfirm] = useState(false);
   const [parentToRemove, setParentToRemove] = useState<any>(null);
@@ -55,28 +54,14 @@ export default function ManageFamilyScreen() {
         getJoinRequests(family.id),
         getChildren(family.id),
         getParentJoinRequests(family.id),
-        fetchParents(),
+        getParents(family.id),
       ]);
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
     }
   };
 
-  const fetchParents = async () => {
-    if (!family?.id) return;
-    try {
-      const { data: parentsData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('family_id', family.id)
-        .eq('role', 'parent');
-      
-      if (error) throw error;
-      setParents(parentsData || []);
-    } catch (error: any) {
-      showAlert('Error', error.message, 'error');
-    }
-  };
+  // Parents are now part of the family store; use getParents to refresh
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -158,7 +143,8 @@ export default function ManageFamilyScreen() {
   const handleApproveParentRequest = async (requestId: string) => {
     try {
       await approveParentJoinRequest(requestId);
-      await fetchParents(); // Refresh parents list
+      // Refresh parents list from store
+      if (family?.id) await getParents(family.id);
       showAlert('Success', 'Family join request approved (Parent)', 'success');
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
@@ -199,7 +185,7 @@ export default function ManageFamilyScreen() {
       if (error) throw error;
 
       // Refresh parents list from database to ensure it's updated
-      await fetchParents();
+      if (family?.id) await getParents(family.id);
 
       showAlert('Success', 'Parent removed from family', 'success');
     } catch (error: any) {
@@ -243,19 +229,48 @@ export default function ManageFamilyScreen() {
   };
 
   if (!family || user?.role !== 'parent') {
+    const isParent = user?.role === 'parent';
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>👨‍👩‍👧‍👦</Text>
-            <Text style={styles.heading}>Family</Text>
-          </View>
-
-          <Card padding={16} marginVertical={12}>
-            <Text style={styles.message}>
-              Only parents can manage family settings.
+          <View style={styles.notParentContainer}>
+            <View style={styles.notParentIconCircle}>
+              <Text style={styles.notParentIcon}>�</Text>
+            </View>
+            <Text style={styles.notParentTitle}>Family</Text>
+            <Text style={styles.notParentSubtitle}>
+              {isParent
+                ? 'You aren’t in a family yet. Create a family or join one with a code.'
+                : 'Only parents can manage family settings.'}
             </Text>
-          </Card>
+
+            <Card padding={20} marginVertical={16} style={styles.notParentCard}>
+              <Text style={styles.message}>
+                {isParent
+                  ? 'Create a new family to start assigning chores, or join an existing family using a family code.'
+                  : 'If you are a parent, ask your partner to invite you or create a family.'}
+              </Text>
+
+              {isParent && (
+                <View style={styles.notParentActions}>
+                  <Button
+                    title="Create Family"
+                    onPress={() => router.push('/(app)/parent/create-family')}
+                    variant="primary"
+                    size="md"
+                    style={{ flex: 1, marginRight: 8 }}
+                  />
+                  <Button
+                    title="Join Family"
+                    onPress={() => router.push('/(app)/parent/join-family')}
+                    variant="outline"
+                    size="md"
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              )}
+            </Card>
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -352,7 +367,7 @@ export default function ManageFamilyScreen() {
                   <View key={parent.id} style={styles.parentCard}>
                     <View style={styles.parentAvatar}>
                       <Text style={styles.parentAvatarText}>
-                        {parent.display_name.charAt(0).toUpperCase()}
+                        {parent.emoji || parent.display_name.charAt(0)}
                       </Text>
                     </View>
                     <View style={styles.parentInfo}>
@@ -540,6 +555,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 40,
+  },
+  notParentContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 40,
+    paddingBottom: 40,
+  },
+  notParentIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  notParentIcon: {
+    fontSize: 36,
+  },
+  notParentTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  notParentSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 12,
+    maxWidth: 420,
+  },
+  notParentCard: {
+    width: '100%',
+    maxWidth: 640,
+    alignItems: 'center',
+  },
+  notParentActions: {
+    flexDirection: 'row',
+    marginTop: 12,
+    width: '100%',
   },
   header: {
     marginBottom: 32,
@@ -732,14 +789,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#E0E7FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   parentAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 22,
+    color: '#4F46E5',
+    fontSize: 28,
     fontWeight: '700',
   },
   parentInfo: {

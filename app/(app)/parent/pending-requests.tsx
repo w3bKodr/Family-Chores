@@ -19,6 +19,7 @@ export default function PendingRequestsScreen() {
     rejectJoinRequest,
     approveParentJoinRequest,
     rejectParentJoinRequest,
+    getParents,
   } = useFamilyStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -77,6 +78,11 @@ export default function PendingRequestsScreen() {
   const handleApproveParent = async (id: string) => {
     try {
       await approveParentJoinRequest(id);
+      // Refresh parent requests and parents list so UI updates immediately
+      if (family?.id) {
+        await getParentJoinRequests(family.id);
+        await getParents(family.id);
+      }
       showAlert('Success', 'Family join request approved (Parent)', 'success');
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed', 'error');

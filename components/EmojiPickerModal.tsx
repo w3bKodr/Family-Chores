@@ -26,6 +26,11 @@ const CHILD_EMOJIS = {
   'Children': ['👶', '👧', '👦', '👶🏻', '👧🏻', '👦🏻', '👶🏼', '👧🏼', '👦🏼', '👶🏽', '👧🏽', '👦🏽', '👶🏾', '👧🏾', '👦🏾', '👶🏿', '👧🏿', '👦🏿'],
 };
 
+// Adult/Parent-specific emojis for avatar selection
+const PARENT_EMOJIS = {
+  'Parents': ['👨', '👩', '👨🏻', '👩🏻', '👨🏼', '👩🏼', '👨🏽', '👩🏽', '👨🏾', '👩🏾', '👨🏿', '👩🏿', '🧔', '🧔🏻', '🧔🏼', '🧔🏽', '🧔🏾', '🧔🏿', '👨‍🦰', '👩‍🦰', '👨‍🦱', '👩‍🦱', '👨‍🦳', '👩‍🦳', '👨‍🦲', '👩‍🦲'],
+};
+
 // Emoji keyword mapping for search
 const EMOJI_KEYWORDS: Record<string, string[]> = {
   '🧹': ['broom', 'sweep', 'clean', 'cleaning'],
@@ -75,7 +80,8 @@ interface EmojiPickerModalProps {
   onClose: () => void;
   onSelectEmoji: (emoji: string) => void;
   selectedEmoji?: string;
-  childMode?: boolean; // New prop to enable child-only emoji selection
+  childMode?: boolean;
+  parentMode?: boolean;
 }
 
 export function EmojiPickerModal({
@@ -83,10 +89,13 @@ export function EmojiPickerModal({
   onClose,
   onSelectEmoji,
   selectedEmoji,
-  childMode = false, // Default to false for backwards compatibility
+  childMode = false,
+  parentMode = false,
 }: EmojiPickerModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [recentEmojis, setRecentEmojis] = useState<string[]>(childMode ? ['👶', '👧', '👦'] : ['🎁', '🏆', '⭐', '🎮']);
+  const [recentEmojis, setRecentEmojis] = useState<string[]>(
+    childMode ? ['👶', '👧', '👦'] : parentMode ? ['👨', '👩', '🧔'] : ['🎁', '🏆', '⭐', '🎮']
+  );
 
   const handleSelectEmoji = (emoji: string) => {
     onSelectEmoji(emoji);
@@ -96,8 +105,8 @@ export function EmojiPickerModal({
     onClose();
   };
 
-  // Use child emojis or regular emojis based on mode
-  const emojiCategories = childMode ? CHILD_EMOJIS : EMOJI_CATEGORIES;
+  // Use child, parent, or regular emojis based on mode
+  const emojiCategories = childMode ? CHILD_EMOJIS : parentMode ? PARENT_EMOJIS : EMOJI_CATEGORIES;
 
   const filteredCategories = searchQuery
     ? Object.entries(emojiCategories).reduce((acc, [category, emojis]) => {
@@ -126,13 +135,13 @@ export function EmojiPickerModal({
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
-            <Text style={styles.title}>{childMode ? 'Choose Child Avatar' : 'Choose Emoji'}</Text>
+            <Text style={styles.title}>{childMode ? 'Choose Child Avatar' : parentMode ? 'Choose Your Avatar' : 'Choose Emoji'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          {!childMode && (
+          {!childMode && !parentMode && (
             <View style={styles.searchContainer}>
               <Text style={styles.searchIcon}>🔍</Text>
               <TextInput

@@ -7,6 +7,7 @@ export interface User {
   family_id: string | null;
   created_at: string;
   display_name: string;
+  emoji?: string;
 }
 
 export interface Family {

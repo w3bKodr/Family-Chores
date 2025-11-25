@@ -9,6 +9,7 @@ interface CardProps {
   marginVertical?: number;
   borderColor?: string;
   borderWidth?: number;
+  style?: any;
 }
 
 export function Card({
@@ -19,6 +20,7 @@ export function Card({
   marginVertical = 8,
   borderColor = '#E0E0E0',
   borderWidth = 1,
+  style,
 }: CardProps) {
   return (
     <View
@@ -32,6 +34,7 @@ export function Card({
           borderColor,
           borderWidth,
         },
+        style,
       ]}
     >
       {children}

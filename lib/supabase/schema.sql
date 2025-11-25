@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   role TEXT NOT NULL CHECK (role IN ('parent', 'child')),
   family_id UUID,
   display_name TEXT NOT NULL,
+  emoji TEXT NOT NULL DEFAULT '👤',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -193,6 +194,51 @@ ALTER TABLE public.families REPLICA IDENTITY FULL;
 -- Users table policies
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
+-- Function to update user profile (bypasses RLS issues)
+CREATE OR REPLACE FUNCTION public.update_user_profile(
+  p_display_name text DEFAULT NULL,
+  p_emoji text DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  result json;
+  v_display_name text;
+  v_emoji text;
+BEGIN
+  -- Get current values
+  SELECT display_name, emoji INTO v_display_name, v_emoji
+  FROM users
+  WHERE id = auth.uid();
+
+  -- Use provided values or keep existing
+  v_display_name := COALESCE(p_display_name, v_display_name);
+  v_emoji := COALESCE(p_emoji, v_emoji);
+
+  -- Update the user
+  UPDATE users
+  SET display_name = v_display_name,
+      emoji = v_emoji
+  WHERE id = auth.uid()
+  RETURNING json_build_object(
+    'id', id, 
+    'display_name', display_name,
+    'emoji', emoji
+  ) INTO result;
+
+  IF result IS NULL THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.update_user_profile(text, text) TO authenticated;
+
 -- Helper to read current user's family without triggering RLS recursion
 CREATE OR REPLACE FUNCTION public.current_user_family_id()
 RETURNS uuid
@@ -207,7 +253,90 @@ AS $$
   LIMIT 1;
 $$;
 
--- Function to remove a parent from family (bypasses RLS issues)
+-- Function to create or update parent join request (idempotent, allows re-requesting)
+CREATE OR REPLACE FUNCTION public.create_or_update_parent_join_request(
+  p_family_id uuid,
+  p_user_id uuid,
+  p_display_name text,
+  p_user_email text
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  request parent_join_requests;
+  result json;
+BEGIN
+  -- Try to get existing request
+  SELECT * INTO request
+  FROM parent_join_requests
+  WHERE family_id = p_family_id AND user_id = p_user_id;
+
+  IF request IS NULL THEN
+    -- Create new request
+    INSERT INTO parent_join_requests (family_id, user_id, display_name, user_email, status)
+    VALUES (p_family_id, p_user_id, p_display_name, p_user_email, 'pending')
+    RETURNING * INTO request;
+  ELSE
+    -- Update existing request to pending (allows re-requesting)
+    UPDATE parent_join_requests
+    SET status = 'pending', display_name = p_display_name, user_email = p_user_email
+    WHERE family_id = p_family_id AND user_id = p_user_id
+    RETURNING * INTO request;
+  END IF;
+
+  RETURN json_build_object(
+    'id', request.id,
+    'family_id', request.family_id,
+    'user_id', request.user_id,
+    'status', request.status
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_or_update_parent_join_request(uuid, uuid, text, text) TO authenticated;
+
+-- Function to approve parent join requests (bypasses RLS issues)
+CREATE OR REPLACE FUNCTION public.approve_parent_join_request(request_id uuid)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  request parent_join_requests;
+  result json;
+BEGIN
+  -- Fetch the request and validate caller is the family owner
+  SELECT * INTO request
+  FROM parent_join_requests
+  WHERE id = request_id
+  AND family_id IN (SELECT id FROM families WHERE parent_id = auth.uid());
+
+  IF request IS NULL THEN
+    RAISE EXCEPTION 'Request not found or you do not have permission to approve it';
+  END IF;
+
+  -- Update the requesting user's family_id
+  UPDATE users
+  SET family_id = request.family_id
+  WHERE id = request.user_id
+  RETURNING json_build_object('id', id, 'family_id', family_id, 'display_name', display_name) INTO result;
+
+  -- Mark the request as approved
+  UPDATE parent_join_requests
+  SET status = 'approved'
+  WHERE id = request_id;
+
+  RETURN result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.approve_parent_join_request(uuid) TO authenticated;
+
+-- Function to remove a parent from family (bypasses RLS issues, deletes old requests to allow rejoin)
 CREATE OR REPLACE FUNCTION public.remove_parent_from_family(target_user_id uuid)
 RETURNS json
 LANGUAGE plpgsql
@@ -215,15 +344,17 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  family_uuid uuid;
   result json;
 BEGIN
-  -- Check if caller is the family owner
-  IF NOT EXISTS (
-    SELECT 1 FROM families f
-    INNER JOIN users u ON u.id = target_user_id
-    WHERE f.id = u.family_id
-    AND f.parent_id = auth.uid()
-  ) THEN
+  -- Check if caller is the family owner and get family_id
+  SELECT f.id INTO family_uuid
+  FROM families f
+  INNER JOIN users u ON u.id = target_user_id
+  WHERE f.id = u.family_id
+  AND f.parent_id = auth.uid();
+
+  IF family_uuid IS NULL THEN
     RAISE EXCEPTION 'Only family owner can remove parents';
   END IF;
 
@@ -231,6 +362,10 @@ BEGIN
   IF target_user_id = auth.uid() THEN
     RAISE EXCEPTION 'Cannot remove yourself, use leave family instead';
   END IF;
+
+  -- Delete any old parent join requests for this user so they can rejoin
+  DELETE FROM parent_join_requests
+  WHERE family_id = family_uuid AND user_id = target_user_id;
 
   -- Update the user's family_id to null
   UPDATE users
@@ -251,23 +386,25 @@ CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
+-- Replace existing policy to allow family owners to update users who are not yet in a family
+DROP POLICY IF EXISTS "Family owner can update family members" ON public.users;
 CREATE POLICY "Family owner can update family members" ON public.users
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM public.families
-      WHERE id = users.family_id
-      AND parent_id = auth.uid()
+    -- Allow users to update their own profile
+    auth.uid() = id
+    -- OR allow family owners to update users in their family
+    OR users.family_id IS NULL
+    OR users.family_id IN (
+      SELECT id FROM public.families WHERE parent_id = auth.uid()
     )
   )
   WITH CHECK (
-    -- Allow if actor owns a family AND (setting to NULL OR setting to their family)
-    users.family_id IS NULL AND EXISTS (
-      SELECT 1 FROM public.families WHERE parent_id = auth.uid()
-    )
-    OR
-    EXISTS (
-      SELECT 1 FROM public.families
-      WHERE parent_id = auth.uid() AND id = users.family_id
+    -- Allow users to update their own profile
+    auth.uid() = id
+    -- OR allow setting family_id to NULL or to any family owned by the caller
+    OR family_id IS NULL
+    OR family_id IN (
+      SELECT id FROM public.families WHERE parent_id = auth.uid()
     )
   );
 
@@ -451,22 +588,22 @@ CREATE POLICY "Children can claim rewards" ON public.reward_claims
   );
 
 -- Indexes for performance
-CREATE INDEX idx_users_family_id ON public.users(family_id);
-CREATE INDEX idx_users_role ON public.users(role);
-CREATE INDEX idx_families_parent_id ON public.families(parent_id);
-CREATE INDEX idx_families_family_code ON public.families(family_code);
-CREATE INDEX idx_children_family_id ON public.children(family_id);
-CREATE INDEX idx_children_user_id ON public.children(user_id);
-CREATE INDEX idx_join_requests_family_id ON public.join_requests(family_id);
-CREATE INDEX idx_join_requests_user_id ON public.join_requests(user_id);
-CREATE INDEX idx_parent_join_requests_family_id ON public.parent_join_requests(family_id);
-CREATE INDEX idx_parent_join_requests_user_id ON public.parent_join_requests(user_id);
-CREATE INDEX idx_parent_join_requests_status ON public.parent_join_requests(status);
-CREATE INDEX idx_chores_family_id ON public.chores(family_id);
-CREATE INDEX idx_chores_assigned_to ON public.chores(assigned_to);
-CREATE INDEX idx_chore_completions_chore_id ON public.chore_completions(chore_id);
-CREATE INDEX idx_chore_completions_completed_by ON public.chore_completions(completed_by);
-CREATE INDEX idx_chore_completions_completed_date ON public.chore_completions(completed_date);
-CREATE INDEX idx_rewards_family_id ON public.rewards(family_id);
-CREATE INDEX idx_reward_claims_reward_id ON public.reward_claims(reward_id);
-CREATE INDEX idx_reward_claims_child_id ON public.reward_claims(child_id);
+CREATE INDEX IF NOT EXISTS idx_users_family_id ON public.users(family_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
+CREATE INDEX IF NOT EXISTS idx_families_parent_id ON public.families(parent_id);
+CREATE INDEX IF NOT EXISTS idx_families_family_code ON public.families(family_code);
+CREATE INDEX IF NOT EXISTS idx_children_family_id ON public.children(family_id);
+CREATE INDEX IF NOT EXISTS idx_children_user_id ON public.children(user_id);
+CREATE INDEX IF NOT EXISTS idx_join_requests_family_id ON public.join_requests(family_id);
+CREATE INDEX IF NOT EXISTS idx_join_requests_user_id ON public.join_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_parent_join_requests_family_id ON public.parent_join_requests(family_id);
+CREATE INDEX IF NOT EXISTS idx_parent_join_requests_user_id ON public.parent_join_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_parent_join_requests_status ON public.parent_join_requests(status);
+CREATE INDEX IF NOT EXISTS idx_chores_family_id ON public.chores(family_id);
+CREATE INDEX IF NOT EXISTS idx_chores_assigned_to ON public.chores(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_chore_completions_chore_id ON public.chore_completions(chore_id);
+CREATE INDEX IF NOT EXISTS idx_chore_completions_completed_by ON public.chore_completions(completed_by);
+CREATE INDEX IF NOT EXISTS idx_chore_completions_completed_date ON public.chore_completions(completed_date);
+CREATE INDEX IF NOT EXISTS idx_rewards_family_id ON public.rewards(family_id);
+CREATE INDEX IF NOT EXISTS idx_reward_claims_reward_id ON public.reward_claims(reward_id);
+CREATE INDEX IF NOT EXISTS idx_reward_claims_child_id ON public.reward_claims(child_id);

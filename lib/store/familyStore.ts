@@ -6,6 +6,7 @@ import { Family, Child, Chore, ChoreCompletion, Reward, RewardClaim, JoinRequest
 interface FamilyState {
   family: Family | null;
   children: Child[];
+  parents: any[];
   chores: Chore[];
   choreCompletions: ChoreCompletion[];
   rewards: Reward[];
@@ -22,6 +23,7 @@ interface FamilyState {
   
   // Child actions
   getChildren: (familyId: string) => Promise<void>;
+  getParents: (familyId: string) => Promise<void>;
   addChild: (familyId: string, displayName: string, userId?: string | null, emoji?: string) => Promise<void>;
   updateChild: (childId: string, updates: Partial<Child>) => Promise<void>;
   approveChild: (childId: string) => Promise<void>;
@@ -68,6 +70,7 @@ interface FamilyState {
 export const useFamilyStore = create<FamilyState>((set, get) => ({
   family: null,
   children: [],
+  parents: [],
   chores: [],
   choreCompletions: [],
   rewards: [],
@@ -157,6 +160,24 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
       if (error) throw error;
       set({ children: data || [] });
+    } catch (error: any) {
+      set({ error: error.message });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  getParents: async (familyId: string) => {
+    set({ loading: true, error: null });
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('family_id', familyId)
+        .eq('role', 'parent');
+
+      if (error) throw error;
+      set({ parents: data || [] });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -711,29 +732,12 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   approveParentJoinRequest: async (requestId: string) => {
     set({ error: null });
     try {
-      const { data: request } = await supabase
-        .from('parent_join_requests')
-        .select('*')
-        .eq('id', requestId)
-        .single();
-
-      if (!request) throw new Error('Request not found');
-
-      // Update user's family_id to join the family
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ family_id: request.family_id })
-        .eq('id', request.user_id);
-
-      if (updateError) throw updateError;
-
-      // Mark request as approved
-      const { error } = await supabase
-        .from('parent_join_requests')
-        .update({ status: 'approved' })
-        .eq('id', requestId);
+      // Use RPC function to bypass RLS restrictions
+      const { data, error } = await supabase.rpc('approve_parent_join_request', { request_id: requestId });
 
       if (error) throw error;
+
+      console.log('Parent join request approved via RPC:', data);
 
       const { parentJoinRequests } = get();
       set({ parentJoinRequests: parentJoinRequests.filter(r => r.id !== requestId) });
@@ -764,13 +768,21 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   cancelParentJoinRequest: async (requestId: string) => {
     set({ error: null });
     try {
-      const { error } = await supabase
-        .from('parent_join_requests')
-        .delete()
-        .eq('id', requestId);
+      console.log('Cancelling parent join request via RPC:', requestId);
+      const { data, error } = await supabase.rpc('cancel_parent_join_request', { request_id: requestId });
 
       if (error) throw error;
+
+      // Remove from local cache if present
+      const { parentJoinRequests } = get();
+      if (parentJoinRequests && parentJoinRequests.length > 0) {
+        set({ parentJoinRequests: parentJoinRequests.filter(r => r.id !== requestId) });
+      }
+
+      console.log('Cancelled parent join request via RPC, result:', data);
+      return data;
     } catch (error: any) {
+      console.error('Error cancelling parent join request:', error);
       set({ error: error.message });
       throw error;
     }

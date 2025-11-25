@@ -12,25 +12,30 @@ import { supabase } from '@lib/supabase/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
+import { useFamilyStore } from '@lib/store/familyStore';
 
 export default function JoinFamily() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
+  const { getParentJoinRequests } = useFamilyStore();
   const [familyCode, setFamilyCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+  const [alertOnCloseAction, setAlertOnCloseAction] = useState<(() => void) | null>(null);
 
   const showAlert = (
     title: string,
     message: string,
-    type: 'success' | 'error' | 'info' = 'info'
+    type: 'success' | 'error' | 'info' = 'info',
+    onCloseAction: (() => void) | null = null,
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
+    setAlertOnCloseAction(() => onCloseAction);
     setAlertVisible(true);
   };
 
@@ -106,43 +111,37 @@ export default function JoinFamily() {
           setLoading(false);
           return;
         }
-
-        // Check if parent already has a pending request
-        const { data: existingRequest } = await supabase
-          .from('parent_join_requests')
-          .select('id')
-          .eq('family_id', family.id)
-          .eq('user_id', user.id)
-          .eq('status', 'pending')
-          .single();
-
-        if (existingRequest) {
-          showAlert('Info', 'You already have a pending request to join this family. Please wait for approval.', 'info');
-          setLoading(false);
-          return;
-        }
       }
 
-      // For parents, create a join request instead of joining directly
+      // For parents, create or update a join request (allows re-requesting)
       if (user.role === 'parent') {
-        const { error: requestError } = await supabase
-          .from('parent_join_requests')
-          .insert({
-            family_id: family.id,
-            user_id: user.id,
-            display_name: user.display_name,
-            user_email: user.email,
-          });
+        const { data, error: requestError } = await supabase.rpc('create_or_update_parent_join_request', {
+          p_family_id: family.id,
+          p_user_id: user.id,
+          p_display_name: user.display_name,
+          p_user_email: user.email,
+        });
 
         if (requestError) {
           console.error('Parent join request error:', requestError);
           throw requestError;
         }
 
-        showAlert('Success', `Your request to join ${family.name} has been sent! Wait for the family owner to approve.`, 'success');
-        setTimeout(() => {
-          router.back();
-        }, 2000);
+        // Wait for the user to dismiss the success alert; then navigate to dashboard and refresh requests
+        showAlert(
+          'Success',
+          `Your request to join ${family.name} has been sent! Wait for the family owner to approve.`,
+          'success',
+          async () => {
+            try {
+              // Refresh parent join requests for the family so UI badge updates
+              await getParentJoinRequests(family.id);
+            } catch (e) {
+              console.warn('Failed to refresh parent join requests after create:', e);
+            }
+            router.replace('/(app)/parent');
+          }
+        );
         return;
       }
 
@@ -177,10 +176,8 @@ export default function JoinFamily() {
       // Update local user state
       setUser({ ...user, family_id: family.id });
 
-      showAlert('Success', `You've joined ${family.name}!`, 'success');
-      setTimeout(() => {
-        router.replace('/(app)/parent');
-      }, 1500);
+      // Let the user dismiss the confirmation before navigating to dashboard
+      showAlert('Success', `You've joined ${family.name}!`, 'success', () => router.replace('/(app)/parent'));
     } catch (error: any) {
       console.error('Join family error:', error);
       showAlert('Error', error.message || 'Failed to join family', 'error');
@@ -243,7 +240,18 @@ export default function JoinFamily() {
         title={alertTitle}
         message={alertMessage}
         type={alertType}
-        onClose={() => setAlertVisible(false)}
+        onClose={() => {
+          setAlertVisible(false);
+          // Call any action we stored for after the alert is dismissed
+          if (alertOnCloseAction) {
+            try {
+              alertOnCloseAction();
+            } catch (e) {
+              console.error('Error in alert onClose action:', e);
+            }
+            setAlertOnCloseAction(null);
+          }
+        }}
       />
     </SafeAreaView>
   );

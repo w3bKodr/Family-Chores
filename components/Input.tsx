@@ -10,6 +10,9 @@ interface InputProps {
   numberOfLines?: number;
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
   label?: string;
+  autoFocus?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  style?: any;
 }
 
 export function Input({
@@ -21,6 +24,9 @@ export function Input({
   numberOfLines = 1,
   keyboardType = 'default',
   label,
+  autoFocus = false,
+  autoCapitalize = 'sentences',
+  style,
 }: InputProps) {
   return (
     <View style={styles.container}>
@@ -35,6 +41,8 @@ export function Input({
         multiline={multiline}
         numberOfLines={numberOfLines}
         keyboardType={keyboardType}
+        autoFocus={autoFocus}
+        autoCapitalize={autoCapitalize}
         textAlignVertical={multiline ? 'top' : 'center'}
       />
     </View>
