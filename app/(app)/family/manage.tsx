@@ -554,14 +554,14 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 24,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   notParentContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 40,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   notParentIconCircle: {
     width: 72,

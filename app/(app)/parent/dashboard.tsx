@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,10 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -17,6 +20,207 @@ import { supabase } from '@lib/supabase/client';
 import { Button } from '@components/Button';
 import { AlertModal } from '@components/AlertModal';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+
+// Premium animated card wrapper with scale + ripple
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+  accentColor = 'rgba(255,255,255,0.3)',
+  activeOpacity = 0.95,
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+  accentColor?: string;
+  activeOpacity?: number;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={{ flex: 1 }}
+    >
+      <Animated.View style={[style, { flex: 1, transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
+
+// Sparkle particle effect component for child cards
+const SparkleEffect = () => {
+  const sparkleAnims = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
+  
+  useEffect(() => {
+    const createSparkleLoop = (anim: Animated.Value, delay: number) => {
+      const loop = () => {
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.parallel([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 400,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 600,
+              delay: 400,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start(() => loop());
+      };
+      loop();
+    };
+    
+    createSparkleLoop(sparkleAnims[0], 0);
+    createSparkleLoop(sparkleAnims[1], 300);
+    createSparkleLoop(sparkleAnims[2], 600);
+  }, []);
+  
+  return (
+    <View style={styles.sparkleContainer}>
+      {sparkleAnims.map((anim, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            styles.sparkleParticle,
+            {
+              opacity: anim,
+              transform: [
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [4, -2] }) },
+              ],
+              left: index * 8,
+              top: index === 1 ? -4 : 0,
+            },
+          ]}
+        >
+          <Text style={styles.sparkleText}>✦</Text>
+        </Animated.View>
+      ))}
+    </View>
+  );
+};
+
+// Three glowing golden stars with smooth wave motion
+const GoldenStars = ({ points }: { points: number }) => {
+  const waveAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(waveAnim, {
+        toValue: 1,
+        duration: 800,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+  
+  // Each star gets a phase offset to create the wave effect
+  const getStarStyle = (index: number) => {
+    // Phase offset: 0, 0.33, 0.66 of the wave cycle
+    const phaseOffset = index * 0.33;
+    
+    return {
+      opacity: waveAnim.interpolate({
+        inputRange: [0, 0.25, 0.5, 0.75, 1],
+        outputRange: [0.7, 1, 0.7, 1, 0.7].map((v, i, arr) => {
+          const shifted = Math.floor((i + phaseOffset * 4) % 4);
+          return arr[shifted];
+        }),
+      }),
+      transform: [
+        {
+          translateY: waveAnim.interpolate({
+            inputRange: [0, 0.25, 0.5, 0.75, 1],
+            outputRange: [0, -2, 0, 2, 0].map((v, i) => {
+              // Shift the wave based on star index
+              const phase = (i / 4 + phaseOffset) % 1;
+              return Math.sin(phase * Math.PI * 2) * -2;
+            }),
+          }),
+        },
+      ],
+      marginTop: index === 1 ? -4 : 0,
+    };
+  };
+  
+  return (
+    <View style={styles.goldenStarsContainer}>
+      <View style={styles.starsArc}>
+        {[0, 1, 2].map((index) => (
+          <Animated.Text
+            key={index}
+            style={[
+              styles.goldenStar,
+              {
+                opacity: waveAnim.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: index === 1 
+                    ? [1, 0.7, 1]      // middle: starts bright
+                    : index === 0 
+                    ? [0.7, 1, 0.7]    // left: starts dim
+                    : [0.85, 0.85, 0.85], // right: offset
+                }),
+                transform: [
+                  {
+                    translateY: waveAnim.interpolate({
+                      inputRange: [0, 0.25, 0.5, 0.75, 1],
+                      outputRange: index === 0 
+                        ? [0, -2, 0, 2, 0]     // left star
+                        : index === 1
+                        ? [-2, 0, 2, 0, -2]    // middle star (offset by 0.25)
+                        : [0, 2, 0, -2, 0],    // right star (offset by 0.5)
+                    }),
+                  },
+                ],
+                marginTop: index === 1 ? -4 : 0,
+              },
+            ]}
+          >
+            ★
+          </Animated.Text>
+        ))}
+      </View>
+      <Text style={styles.goldenPointsText}>{points}</Text>
+    </View>
+  );
+};
 
 export default function ParentDashboard() {
   const router = useRouter();
@@ -278,7 +482,7 @@ export default function ParentDashboard() {
                     {children.map((child) => {
                       const pendingCount = getPendingCountForChild(child.id);
                       return (
-                        <TouchableOpacity
+                        <PremiumCard
                           key={child.id}
                           style={styles.premiumChildCard}
                           onPress={() =>
@@ -287,13 +491,17 @@ export default function ParentDashboard() {
                               params: { childId: child.id },
                             })
                           }
-                          activeOpacity={0.85}
+                          accentColor="rgba(219, 234, 254, 0.5)"
                         >
+                          {/* Glassmorphism inner glow */}
+                          <View style={styles.glassInnerGlow} />
                           <View style={styles.childCardContent}>
-                            {/* Avatar with Glow */}
+                            {/* Avatar with Glowing White Rim */}
                             <View style={styles.childAvatarGlow}>
-                              <View style={styles.premiumChildAvatar}>
-                                <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
+                              <View style={styles.avatarGlowRing}>
+                                <View style={styles.premiumChildAvatar}>
+                                  <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
+                                </View>
                               </View>
                               {pendingCount > 0 && (
                                 <Animated.View 
@@ -317,29 +525,10 @@ export default function ParentDashboard() {
                             </View>
                             <View style={styles.childCardDetails}>
                               <Text style={styles.premiumChildName}>{child.display_name}</Text>
-                              <View style={styles.premiumStarBadge}>
-                                <Animated.Text 
-                                  style={[
-                                    styles.starText,
-                                    {
-                                      transform: [
-                                        {
-                                          scale: starBounceAnim.interpolate({
-                                            inputRange: [0, 0.5, 1],
-                                            outputRange: [1, 1.2, 1],
-                                          }),
-                                        },
-                                      ],
-                                    },
-                                  ]}
-                                >
-                                  ✨
-                                </Animated.Text>
-                                <Text style={styles.premiumPointsText}>{child.points}</Text>
-                              </View>
+                              <GoldenStars points={child.points} />
                             </View>
                           </View>
-                        </TouchableOpacity>
+                        </PremiumCard>
                       );
                     })}
                   </View>
@@ -347,72 +536,92 @@ export default function ParentDashboard() {
               </View>
             </View>
 
-            {/* Quick Actions - Floating Style Premium Cards */}
+            {/* Quick Actions - Modern Hero Buttons */}
             <View style={styles.quickActionsSection}>
               <Text style={styles.sectionTitlePremium}>Quick Actions</Text>
-              <View style={styles.floatingActionsGrid}>
-                {/* New Chore - Vibrant Green */}
-                <TouchableOpacity 
-                  onPress={() => router.push('/(app)/parent/create-chore')}
-                  style={[styles.floatingActionCard, styles.floatingActionGreen]}
-                  activeOpacity={0.8}
+              <View style={styles.actionCardsRow}>
+                {/* Manage Chores - Emerald Modern */}
+                <PremiumCard 
+                  onPress={() => router.push('/(app)/parent/weekly-view')}
+                  style={styles.modernActionCard}
                 >
-                  <View style={styles.floatingActionIconWrapper}>
-                    <MaterialCommunityIcons name="plus-circle" size={44} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.floatingActionTitle}>New Chore</Text>
-                  <Text style={styles.floatingActionSubtitle}>Create a task</Text>
-                </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#10B981', '#059669']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.modernActionGradient}
+                  >
+                    {/* Top glow accent */}
+                    <View style={styles.actionAccentGlow} />
+                    
+                    {/* Icon - Large & Bold */}
+                    <View style={styles.modernIconWrapper}>
+                      <Ionicons name="checkmark-circle" size={52} color="#FFFFFF" />
+                    </View>
+                    
+                    {/* Text Content */}
+                    <View style={styles.modernTextBlock}>
+                      <Text style={styles.modernActionTitle}>Manage Chores</Text>
+                      <Text style={styles.modernActionSubtitle}>View schedule</Text>
+                    </View>
+                  </LinearGradient>
+                </PremiumCard>
 
-                {/* Rewards - Vibrant Purple */}
-                <TouchableOpacity 
+                {/* Rewards - Purple Modern */}
+                <PremiumCard 
                   onPress={() => router.push('/(app)/parent/rewards')}
-                  style={[styles.floatingActionCard, styles.floatingActionPurple]}
-                  activeOpacity={0.8}
+                  style={styles.modernActionCard}
                 >
-                  <View style={styles.floatingActionIconWrapper}>
-                    <MaterialCommunityIcons name="gift-open" size={44} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.floatingActionTitle}>Rewards</Text>
-                  <Text style={styles.floatingActionSubtitle}>Manage rewards</Text>
-                </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#8B5CF6', '#7C3AED']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.modernActionGradient}
+                  >
+                    {/* Top glow accent */}
+                    <View style={styles.actionAccentGlow} />
+                    
+                    {/* Icon - Large & Bold */}
+                    <View style={styles.modernIconWrapper}>
+                      <Ionicons name="gift" size={52} color="#FFFFFF" />
+                    </View>
+                    
+                    {/* Text Content */}
+                    <View style={styles.modernTextBlock}>
+                      <Text style={styles.modernActionTitle}>Rewards</Text>
+                      <Text style={styles.modernActionSubtitle}>Unlock rewards</Text>
+                    </View>
+                  </LinearGradient>
+                </PremiumCard>
               </View>
             </View>
 
-            {/* Premium Full-Width Action Tiles */}
+            {/* Premium Full-Width Action Tiles with Gradients */}
             <View style={styles.premiumTilesSection}>
-              {/* Weekly Schedule Tile */}
-              <TouchableOpacity 
-                onPress={() => router.push('/(app)/parent/weekly-view')}
-                style={[styles.premiumWideTile, styles.premiumTileOrange]}
-                activeOpacity={0.85}
-              >
-                <View style={styles.premiumTileIcon}>
-                  <MaterialCommunityIcons name="calendar-week" size={40} color="#FFFFFF" />
-                </View>
-                <View style={styles.premiumTileContent}>
-                  <Text style={styles.premiumTileTitle}>Weekly Schedule</Text>
-                  <Text style={styles.premiumTileSubtitle}>View all chores for the week</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" style={{ opacity: 0.8 }} />
-              </TouchableOpacity>
-
-              {/* Switch to Child Mode Tile */}
+              {/* Switch to Child Mode Tile - Blue Gradient */}
               {children.length > 0 && (
-                <TouchableOpacity 
+                <PremiumCard 
                   onPress={() => router.push('/(app)/parent/switch-to-child')}
-                  style={[styles.premiumWideTile, styles.premiumTileBlue]}
-                  activeOpacity={0.85}
+                  style={styles.premiumTileWrapper}
+                  accentColor="rgba(14, 165, 233, 0.4)"
                 >
-                  <View style={styles.premiumTileIcon}>
-                    <MaterialCommunityIcons name="account-switch" size={40} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.premiumTileContent}>
-                    <Text style={styles.premiumTileTitle}>Switch to Child Mode</Text>
-                    <Text style={styles.premiumTileSubtitle}>View and complete chores as your child</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" style={{ opacity: 0.8 }} />
-                </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#38BDF8', '#0EA5E9', '#0284C7']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.premiumWideTile}
+                  >
+                    <View style={styles.tileInnerGlow} />
+                    <View style={styles.premiumTileIcon}>
+                      <Ionicons name="people" size={40} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.premiumTileContent}>
+                      <Text style={styles.premiumTileTitle}>Switch to Child Mode</Text>
+                      <Text style={styles.premiumTileSubtitle}>View and complete chores as your child</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={26} color="#FFFFFF" style={{ opacity: 0.9 }} />
+                  </LinearGradient>
+                </PremiumCard>
               )}
             </View>
           </View>
@@ -503,7 +712,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
 
   // ===== PREMIUM HEADER =====
@@ -512,12 +721,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 24,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     shadowColor: '#FF6B35',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
     elevation: 12,
   },
   headerTop: {
@@ -526,31 +735,35 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 4,
     letterSpacing: -0.5,
+    fontFamily: 'System',
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontWeight: '500',
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   premiumNotificationButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    // Glassmorphism inner glow simulation
+    overflow: 'hidden',
   },
   notificationGlow: {
     alignItems: 'center',
@@ -569,7 +782,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 6,
     borderWidth: 2,
@@ -578,67 +791,89 @@ const styles = StyleSheet.create({
   notificationBadgeText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
   },
 
   // ===== CONTENT CONTAINER =====
   contentContainer: {
     paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingTop: 28,
   },
 
-  // ===== PREMIUM TRACKER CARD =====
+  // ===== PREMIUM TRACKER CARD (Glassmorphism) =====
   premiumTrackerCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 28,
     padding: 24,
     marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    // Premium soft shadow
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
     elevation: 8,
+    // Subtle border for glassmorphism
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    // Inner glow effect via nested view
+    overflow: 'hidden',
+  },
+  glassInnerGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
   trackerHeader: {
     marginBottom: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: 'rgba(243, 244, 246, 0.8)',
   },
   trackerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#1F2937',
     marginBottom: 4,
+    letterSpacing: -0.5,
   },
   trackerSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#6B7280',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
-  // ===== PREMIUM CHILD CARDS =====
+  // ===== PREMIUM CHILD CARDS (Frosted Glass) =====
   childrenSection: {
     marginTop: 0,
   },
   childrenGrid: {
-    gap: 12,
+    gap: 14,
   },
   premiumChildCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 28,
+    padding: 18,
     marginBottom: 0,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    // Glassmorphism border
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    // Premium shadow
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
     elevation: 4,
+    overflow: 'hidden',
   },
   childCardContent: {
     flexDirection: 'row',
@@ -646,25 +881,40 @@ const styles = StyleSheet.create({
   },
   childAvatarGlow: {
     position: 'relative',
-    marginRight: 16,
+    marginRight: 18,
+  },
+  // Glowing white rim around avatar
+  avatarGlowRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Glowing white rim
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 1)',
   },
   premiumChildAvatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   childAvatarEmoji: {
-    fontSize: 36,
+    fontSize: 38,
   },
   premiumPendingBadge: {
     position: 'absolute',
@@ -694,11 +944,65 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   premiumChildName: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: 10,
+    letterSpacing: -0.3,
   },
+  
+  // ===== GOLDEN STARS WITH SPARKLE =====
+  goldenStarsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(254, 243, 199, 0.7)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  starsArc: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  goldenStar: {
+    fontSize: 16,
+    color: '#F59E0B',
+    textShadowColor: '#FBBF24',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  sparkleContainer: {
+    position: 'relative',
+    width: 24,
+    height: 16,
+    marginLeft: 2,
+  },
+  sparkleParticle: {
+    position: 'absolute',
+  },
+  sparkleText: {
+    fontSize: 8,
+    color: '#F59E0B',
+    textShadowColor: '#FBBF24',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  goldenPointsText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#92400E',
+    marginLeft: 0,
+  },
+
+  // Legacy star badge (for compatibility)
   premiumStarBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -728,8 +1032,8 @@ const styles = StyleSheet.create({
   emptyChildrenCard: {
     padding: 32,
     alignItems: 'center',
-    borderRadius: 20,
-    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
+    backgroundColor: 'rgba(249, 250, 251, 0.8)',
     borderWidth: 2,
     borderColor: '#E5E7EB',
     borderStyle: 'dashed',
@@ -751,35 +1055,107 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ===== FLOATING ACTIONS SECTION =====
+  // ===== FLOATING ACTIONS SECTION (Gradients) =====
   quickActionsSection: {
     marginBottom: 32,
   },
   sectionTitlePremium: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: '#1F2937',
-    marginBottom: 16,
+    marginBottom: 18,
     letterSpacing: -0.5,
   },
-  floatingActionsGrid: {
+  // ===== QUICK ACTION CARDS (Modern Hero Buttons) =====
+  actionCardsRow: {
     flexDirection: 'row',
     gap: 16,
+  },
+  modernActionCard: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    height: 168,
+    borderRadius: 24,
+    overflow: 'hidden',
+    // Soft modern shadow
+    shadowColor: 'rgba(0, 0, 0, 0.12)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  modernActionGradient: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     justifyContent: 'space-between',
+  },
+  actionAccentGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '30%',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomLeftRadius: 80,
+    borderBottomRightRadius: 80,
+  },
+  modernIconWrapper: {
+    zIndex: 2,
+    marginTop: 8,
+  },
+  modernTextBlock: {
+    zIndex: 2,
+  },
+  modernActionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  modernActionSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFFFFF',
+    opacity: 0.88,
+  },
+
+  floatingActionWrapper: {
+    flex: 1,
   },
   floatingActionCard: {
     flex: 1,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 28,
+    padding: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-    borderWidth: 1,
+    minHeight: 150,
+    // Glassmorphism inner glow
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  cardInnerGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   floatingActionGreen: {
     backgroundColor: '#10B981',
@@ -788,40 +1164,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5CF6',
   },
   floatingActionIconWrapper: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   floatingActionTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 4,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   floatingActionSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#FFFFFF',
     textAlign: 'center',
-    fontWeight: '400',
+    fontWeight: '500',
     opacity: 0.9,
   },
 
-  // ===== PREMIUM TILES SECTION =====
+  // ===== PREMIUM TILES SECTION (Gradients) =====
   premiumTilesSection: {
     gap: 16,
     marginBottom: 24,
   },
+  premiumTileWrapper: {
+    width: '100%',
+  },
   premiumWideTile: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-    borderWidth: 1,
+    borderRadius: 28,
+    padding: 22,
+    // Glassmorphism
+    borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 8,
+    overflow: 'hidden',
+  },
+  tileInnerGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   premiumTileOrange: {
     backgroundColor: '#F97316',
@@ -830,11 +1222,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#0EA5E9',
   },
   premiumTileIcon: {
-    marginRight: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginRight: 18,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -842,15 +1234,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   premiumTileTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 4,
+    letterSpacing: 0.2,
   },
   premiumTileSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFFFFF',
-    fontWeight: '400',
+    fontWeight: '500',
     opacity: 0.9,
   },
 
@@ -996,6 +1389,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 40,
+    paddingBottom: 100,
   },
   optionsContainer: {
     gap: 16,
@@ -1330,7 +1724,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: 16,
   },
-  actionCard: {
+  legacyActionCard: {
     backgroundColor: '#FFFFFF',
     width: '48%',
     padding: 16,

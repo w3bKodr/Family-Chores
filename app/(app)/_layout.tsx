@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ModernBottomTabBar from '@components/ModernBottomTabBar';
 
 export default function AppLayout() {
   const { user } = useAuthStore();
@@ -25,12 +26,13 @@ export default function AppLayout() {
 
   return (
     <Tabs
+      tabBar={(props) => <ModernBottomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#FF6B6B',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: '#FF6B35',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
         },
       }}
