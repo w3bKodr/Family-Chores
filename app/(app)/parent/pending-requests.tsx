@@ -1,10 +1,46 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, SafeAreaView, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, SafeAreaView, ScrollView, StyleSheet, RefreshControl, Pressable, Animated, Easing } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { useAuthStore } from '@lib/store/authStore';
 import { Button } from '@components/Button';
 import { AlertModal } from '@components/AlertModal';
+
+// Premium Card with press animation
+const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 100,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[styles.premiumCard, style, { transform: [{ scale: scaleAnim }] }]}>
+          {children}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.premiumCard, style]}>{children}</View>;
+};
 
 export default function PendingRequestsScreen() {
   const router = useRouter();
@@ -102,8 +138,18 @@ export default function PendingRequestsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.emptyContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <Text style={styles.title}>Pending Requests</Text>
-          <Text style={styles.subtitle}>You don't have a family yet or there are no pending requests.</Text>
+          <View style={styles.emptyHeader}>
+            <View style={styles.iconCircle}>
+              <LinearGradient
+                colors={['#FF6B35', '#FF8F5A']}
+                style={styles.iconGradient}
+              >
+                <Text style={styles.iconEmoji}>📋</Text>
+              </LinearGradient>
+            </View>
+            <Text style={styles.title}>Pending Requests</Text>
+            <Text style={styles.subtitle}>You don't have a family yet or there are no pending requests.</Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -112,22 +158,32 @@ export default function PendingRequestsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-        <Text style={styles.pageTitle}>Pending Requests</Text>
+        <View style={styles.pageHeader}>
+          <View style={styles.iconCircle}>
+            <LinearGradient
+              colors={['#FF6B35', '#FF8F5A']}
+              style={styles.iconGradient}
+            >
+              <Text style={styles.iconEmoji}>📋</Text>
+            </LinearGradient>
+          </View>
+          <Text style={styles.pageTitle}>Pending Requests</Text>
+        </View>
 
         {parentJoinRequests.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Family Join Requests — Parent</Text>
             {parentJoinRequests.map((r: any) => (
-              <View key={r.id} style={styles.requestCard}>
+              <PremiumCard key={r.id} style={styles.requestCard}>
                 <View style={styles.requestInfo}>
                   <Text style={styles.requestName}>{r.display_name || r.users?.display_name || 'Unknown'}</Text>
                   <Text style={styles.requestMeta}>{r.user_email || r.users?.email || 'No email'}</Text>
                 </View>
                 <View style={styles.requestActions}>
-                  <TouchableOpacity onPress={() => handleApproveParent(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleRejectParent(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></TouchableOpacity>
+                  <Pressable onPress={() => handleApproveParent(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
+                  <Pressable onPress={() => handleRejectParent(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
                 </View>
-              </View>
+              </PremiumCard>
             ))}
           </View>
         )}
@@ -136,17 +192,25 @@ export default function PendingRequestsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Child Requests</Text>
             {joinRequests.map((r: any) => (
-              <View key={r.id} style={styles.requestCard}>
+              <PremiumCard key={r.id} style={styles.requestCard}>
                 <View style={styles.requestInfo}>
                   <Text style={styles.requestName}>{r.user_email || r.users?.display_name || r.user_id}</Text>
                   <Text style={styles.requestMeta}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</Text>
                 </View>
                 <View style={styles.requestActions}>
-                  <TouchableOpacity onPress={() => handleApproveChild(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleRejectChild(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></TouchableOpacity>
+                  <Pressable onPress={() => handleApproveChild(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
+                  <Pressable onPress={() => handleRejectChild(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
                 </View>
-              </View>
+              </PremiumCard>
             ))}
+          </View>
+        )}
+
+        {parentJoinRequests.length === 0 && joinRequests.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>✨</Text>
+            <Text style={styles.emptyTitle}>All caught up!</Text>
+            <Text style={styles.emptySubtitle}>No pending requests at the moment.</Text>
           </View>
         )}
 
@@ -158,21 +222,164 @@ export default function PendingRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  content: { padding: 16, paddingBottom: 40 },
-  emptyContent: { padding: 24 },
-  pageTitle: { fontSize: 28, fontWeight: '700', marginBottom: 12 },
-  title: { fontSize: 24, fontWeight: '700', marginBottom: 8 },
-  subtitle: { color: '#6B7280' },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  requestCard: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, borderWidth:1, borderColor:'#F3F4F6' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#FBF8F3',
+  },
+  content: { 
+    padding: 20, 
+    paddingBottom: 120,
+  },
+  emptyContent: { 
+    padding: 24,
+    flexGrow: 1,
+  },
+  emptyHeader: {
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  pageHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 16,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  iconGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconEmoji: {
+    fontSize: 36,
+  },
+  pageTitle: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#1A1A2E',
+    letterSpacing: -0.5,
+  },
+  title: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    marginBottom: 8,
+    color: '#1A1A2E',
+    letterSpacing: -0.5,
+  },
+  subtitle: { 
+    color: '#8F92A1',
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  section: { 
+    marginBottom: 24,
+  },
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    marginBottom: 12,
+    color: '#1A1A2E',
+    letterSpacing: -0.3,
+  },
+  premiumCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  requestCard: { 
+    padding: 16, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: 12,
+  },
   requestInfo: {},
-  requestName: { fontSize: 16, fontWeight: '700' },
-  requestMeta: { fontSize: 12, color: '#6B7280' },
-  requestActions: { flexDirection: 'row', gap: 8 },
-  approveButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  approveText: { color: '#FFFFFF', fontWeight: '700' },
-  rejectButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center' },
-  rejectText: { color: '#FFFFFF', fontWeight: '700' },
+  requestName: { 
+    fontSize: 16, 
+    fontWeight: '700',
+    color: '#1A1A2E',
+    letterSpacing: -0.3,
+  },
+  requestMeta: { 
+    fontSize: 13, 
+    color: '#8F92A1',
+    marginTop: 2,
+  },
+  requestActions: { 
+    flexDirection: 'row', 
+    gap: 10,
+  },
+  approveButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#10B981', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  approveText: { 
+    color: '#FFFFFF', 
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  rejectButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#EF4444', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  rejectText: { 
+    color: '#FFFFFF', 
+    fontWeight: '700',
+    fontSize: 18,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#8F92A1',
+    fontWeight: '500',
+  },
 });

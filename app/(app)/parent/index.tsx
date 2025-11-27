@@ -5,7 +5,7 @@ export default function ParentScreenIndex() {
   const router = useRouter();
 
   React.useEffect(() => {
-    router.replace('/(app)/parent/dashboard');
+    router.replace('/(app)/parent-dashboard');
   }, []);
 
   return null;

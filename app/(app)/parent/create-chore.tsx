@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,11 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StyleSheet,
+  Animated,
+  Easing,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -14,6 +18,53 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
 import { EmojiPickerModal } from '@components/EmojiPickerModal';
+
+// Premium animated card wrapper
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function CreateChore() {
   const router = useRouter();
@@ -118,9 +169,14 @@ export default function CreateChore() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
+          <LinearGradient
+            colors={['#FF6B35', '#F7931E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconCircle}
+          >
             <Text style={styles.icon}>{isEditMode ? '✏️' : '➕'}</Text>
-          </View>
+          </LinearGradient>
           <Text style={styles.title}>{isEditMode ? 'Edit Chore' : 'Create Chore'}</Text>
           <Text style={styles.subtitle}>
             {isEditMode ? 'Update the task details' : 'Add a new task for your child'}
@@ -129,13 +185,13 @@ export default function CreateChore() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Choose Emoji</Text>
-          <TouchableOpacity
+          <PremiumCard
             style={styles.emojiSelector}
             onPress={() => setShowEmojiPicker(true)}
           >
             <Text style={styles.selectedEmojiLarge}>{emoji}</Text>
             <Text style={styles.changeLinkText}>Tap to change</Text>
-          </TouchableOpacity>
+          </PremiumCard>
         </View>
 
         <View style={styles.card}>
@@ -168,7 +224,7 @@ export default function CreateChore() {
           <Text style={styles.sectionTitle}>Assign to Child</Text>
           <View style={styles.childList}>
             {children.map((child) => (
-              <TouchableOpacity
+              <PremiumCard
                 key={child.id}
                 onPress={() => setSelectedChild(child.id)}
                 style={[
@@ -177,8 +233,11 @@ export default function CreateChore() {
                 ]}
               >
                 <View style={styles.childInfo}>
-                  <View style={styles.childAvatar}>
-                    <Text>{child.emoji || '👶'}</Text>
+                  <View style={[
+                    styles.childAvatar,
+                    selectedChild === child.id && styles.childAvatarSelected,
+                  ]}>
+                    <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
                   </View>
                   <Text
                     style={[
@@ -192,7 +251,7 @@ export default function CreateChore() {
                 {selectedChild === child.id && (
                   <Text style={styles.checkmark}>✓</Text>
                 )}
-              </TouchableOpacity>
+              </PremiumCard>
             ))}
           </View>
         </View>
@@ -201,7 +260,7 @@ export default function CreateChore() {
           <Text style={styles.sectionTitle}>Repeat on Days</Text>
           <View style={styles.daysGrid}>
             {DAYS.map((day) => (
-              <TouchableOpacity
+              <PremiumCard
                 key={day}
                 onPress={() => toggleDay(day)}
                 style={[
@@ -217,25 +276,30 @@ export default function CreateChore() {
                 >
                   {day.slice(0, 3)}
                 </Text>
-              </TouchableOpacity>
+              </PremiumCard>
             ))}
           </View>
         </View>
 
-        <Button
-          title={loading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Chore' : 'Create Chore')}
-          onPress={handleCreateChore}
-          disabled={loading}
-          variant="primary"
-          size="lg"
-        />
+        <PremiumCard style={styles.primaryButton} onPress={handleCreateChore}>
+          <LinearGradient
+            colors={['#FF6B35', '#F7931E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.primaryButtonGradient}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Chore' : 'Create Chore')}
+            </Text>
+          </LinearGradient>
+        </PremiumCard>
 
-        <Button
-          title="Cancel"
+        <TouchableOpacity 
           onPress={() => router.back()}
-          variant="ghost"
-          size="lg"
-        />
+          style={styles.backLink}
+        >
+          <Text style={styles.backLinkText}>Cancel</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <AlertModal
@@ -259,84 +323,89 @@ export default function CreateChore() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F3',
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
     paddingTop: 24,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#D1FAE5',
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
+    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8,
   },
   icon: {
     fontSize: 40,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#6B7280',
+    lineHeight: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 24,
+    borderRadius: 28,
+    marginBottom: 20,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 16,
+    letterSpacing: -0.3,
   },
   emojiSelector: {
     alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
+    paddingVertical: 28,
+    backgroundColor: '#FBF8F3',
+    borderRadius: 20,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   selectedEmojiLarge: {
     fontSize: 72,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   changeLinkText: {
-    fontSize: 14,
-    color: '#6366F1',
+    fontSize: 15,
+    color: '#FF6B35',
     fontWeight: '600',
   },
   childList: {
     gap: 12,
   },
   childItem: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#FBF8F3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -350,50 +419,93 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   childAvatar: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
+    shadowColor: 'rgba(0, 0, 0, 0.06)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  childAvatarSelected: {
+    backgroundColor: '#FBBF24',
+  },
+  childAvatarEmoji: {
+    fontSize: 20,
   },
   childName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#374151',
+    letterSpacing: -0.3,
   },
   childNameSelected: {
     color: '#92400E',
   },
   checkmark: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#92400E',
   },
   daysGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
   },
   dayButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: '#FBF8F3',
   },
   dayButtonSelected: {
-    backgroundColor: '#FF6B6B',
-    borderColor: '#FF6B6B',
+    backgroundColor: '#FF6B35',
+    borderColor: '#FF6B35',
   },
   dayText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#4B5563',
   },
   dayTextSelected: {
     color: '#FFFFFF',
+  },
+  primaryButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 8,
+    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  primaryButtonGradient: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  backLink: {
+    alignSelf: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+  },
+  backLinkText: {
+    fontSize: 16,
+    color: '#FF6B35',
+    fontWeight: '600',
   },
 });

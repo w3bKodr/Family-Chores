@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,9 @@ import {
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from '@lib/store/authStore';
 
 interface TabRoute {
   key: string;
@@ -30,8 +33,13 @@ interface ModernBottomTabBarProps {
 // Icon mapping for tab routes
 const getIconName = (routeName: string, focused: boolean): keyof typeof Ionicons.glyphMap => {
   const icons: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
-    parent: { active: 'grid', inactive: 'grid-outline' },
-    child: { active: 'checkmark-circle', inactive: 'checkmark-circle-outline' },
+    'parent-dashboard': { active: 'grid', inactive: 'grid-outline' },
+    'parent-chores': { active: 'checkmark-circle', inactive: 'checkmark-circle-outline' },
+    'parent-rewards': { active: 'gift', inactive: 'gift-outline' },
+    'child-dashboard': { active: 'grid', inactive: 'grid-outline' },
+    'child-chores': { active: 'checkmark-circle', inactive: 'checkmark-circle-outline' },
+    'child-rewards': { active: 'gift', inactive: 'gift-outline' },
+    'child-profile': { active: 'person', inactive: 'person-outline' },
     family: { active: 'people', inactive: 'people-outline' },
     profile: { active: 'person', inactive: 'person-outline' },
   };
@@ -43,8 +51,13 @@ const getIconName = (routeName: string, focused: boolean): keyof typeof Ionicons
 // Get display label for tab
 const getTabLabel = (routeName: string): string => {
   const labels: Record<string, string> = {
-    parent: 'Dashboard',
-    child: 'Chores',
+    'parent-dashboard': 'Dashboard',
+    'parent-chores': 'Chores',
+    'parent-rewards': 'Rewards',
+    'child-dashboard': 'Dashboard',
+    'child-chores': 'Chores',
+    'child-rewards': 'Rewards',
+    'child-profile': 'Profile',
     family: 'Family',
     profile: 'Profile',
   };
@@ -95,7 +108,7 @@ const TabItem = ({
   const label = getTabLabel(route.name);
   
   // Premium orange glow for Dashboard, neutral for others
-  const isDashboard = route.name === 'parent';
+  const isDashboard = route.name === 'parent-dashboard';
   const activeColor = isDashboard ? '#FF6B35' : '#FF6B35';
   const inactiveColor = '#9CA3AF';
   
@@ -155,16 +168,53 @@ export default function ModernBottomTabBar({
   descriptors,
 }: ModernBottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [isChildMode, setIsChildMode] = useState(false);
   
-  // Filter out hidden tabs
+  // Check child mode on mount and periodically
+  useEffect(() => {
+    const checkMode = async () => {
+      const childId = await AsyncStorage.getItem('active_child_id');
+      setIsChildMode(childId !== null);
+    };
+    checkMode();
+    const interval = setInterval(checkMode, 500);
+    return () => clearInterval(interval);
+  }, []);
+  // Define which tabs to show based on mode
+  const parentTabs = ['parent-dashboard', 'parent-chores', 'parent-rewards', 'family', 'profile'];
+  const childTabs = ['child-dashboard', 'child-chores', 'child-rewards', 'child-profile'];
+  const allowedTabs = isChildMode ? childTabs : parentTabs;
+  
+  // Filter routes based on current mode
   const visibleRoutes = state.routes.filter((route) => {
-    const { options } = descriptors[route.key];
-    return options.href !== null;
+    return allowedTabs.includes(route.name);
   });
   
   if (visibleRoutes.length === 0) {
     return null;
   }
+  
+  // Get the href for a route based on mode
+  // Get the href for a route based on mode
+  const getHref = (routeName: string): string => {
+    const hrefs: Record<string, string> = {
+      'parent-dashboard': '/(app)/parent-dashboard',
+      'parent-chores': '/(app)/parent-chores',
+      'parent-rewards': '/(app)/parent-rewards',
+      'family': '/(app)/family',
+      'profile': '/(app)/profile',
+      'child-dashboard': '/(app)/child-dashboard',
+      'child-chores': '/(app)/child-chores',
+      'child-rewards': '/(app)/child-rewards',
+      'child-profile': '/(app)/child-profile',
+    };
+    return hrefs[routeName] || `/(app)/${routeName}`;
+  };
+  const handleTabPress = (route: any) => {
+    const href = getHref(route.name);
+    router.replace(href as any);
+  };
   
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -188,17 +238,7 @@ export default function ModernBottomTabBar({
               key={route.key}
               route={route}
               focused={focused}
-              onPress={() => {
-                const event = navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-
-                if (!focused && !event.defaultPrevented) {
-                  navigation.navigate(route.name);
-                }
-              }}
+              onPress={() => handleTabPress(route)}
             />
           );
         })}

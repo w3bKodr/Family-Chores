@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Animated,
+  Easing,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -16,6 +20,53 @@ import { supabase } from '@lib/supabase/client';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
+
+// Premium animated card wrapper
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function SignUp() {
   const router = useRouter();
@@ -92,7 +143,7 @@ export default function SignUp() {
 
       console.log('Navigating to app...');
       setTimeout(() => {
-        router.replace('/(app)/child');
+        router.replace('/(app)/child-dashboard');
       }, 1500);
     } catch (error: any) {
       console.error('SignUp error caught:', error);
@@ -124,43 +175,55 @@ export default function SignUp() {
           </View>
 
           <View style={styles.roleCards}>
-            <TouchableOpacity
+            <PremiumCard
               onPress={() => {
                 setIsParent(true);
                 setStep('signup');
               }}
               style={styles.roleCard}
-              activeOpacity={0.7}
             >
-              <Text style={styles.roleEmoji}>👨‍👩‍👧</Text>
-              <Text style={styles.roleTitle}>I'm a Parent</Text>
-              <Text style={styles.roleDescription}>
-                Create chores and manage the family
-              </Text>
-            </TouchableOpacity>
+              <LinearGradient
+                colors={['#FF6B35', '#F7931E']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.roleCardGradient}
+              >
+                <Text style={styles.roleEmoji}>👨‍👩‍👧</Text>
+                <Text style={styles.roleTitle}>I'm a Parent</Text>
+                <Text style={styles.roleDescription}>
+                  Create chores and manage the family
+                </Text>
+              </LinearGradient>
+            </PremiumCard>
 
-            <TouchableOpacity
+            <PremiumCard
               onPress={() => {
                 setIsParent(false);
                 setStep('signup');
               }}
               style={styles.roleCard}
-              activeOpacity={0.7}
             >
-              <Text style={styles.roleEmoji}>👶</Text>
-              <Text style={styles.roleTitle}>I'm a Child</Text>
-              <Text style={styles.roleDescription}>
-                Complete chores and earn rewards
-              </Text>
-            </TouchableOpacity>
+              <LinearGradient
+                colors={['#6366F1', '#8B5CF6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.roleCardGradient}
+              >
+                <Text style={styles.roleEmoji}>👶</Text>
+                <Text style={styles.roleTitle}>I'm a Child</Text>
+                <Text style={styles.roleDescription}>
+                  Complete chores and earn rewards
+                </Text>
+              </LinearGradient>
+            </PremiumCard>
           </View>
 
-          <Button
-            title="Back to Sign In"
+          <TouchableOpacity 
             onPress={() => router.back()}
-            variant="ghost"
-            size="lg"
-          />
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>Back to Sign In</Text>
+          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
     );
@@ -259,7 +322,7 @@ export default function SignUp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FBF8F3',
   },
   keyboardView: {
     flex: 1,
@@ -272,11 +335,11 @@ const styles = StyleSheet.create({
   roleHeader: {
     alignItems: 'center',
     marginBottom: 40,
-    marginTop: 20,
+    marginTop: 40,
   },
   emoji: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 56,
+    marginBottom: 20,
   },
   header: {
     alignItems: 'center',
@@ -284,19 +347,21 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   icon: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 56,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#1F2937',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 24,
   },
   roleCards: {
     flexDirection: 'row',
@@ -305,17 +370,18 @@ const styles = StyleSheet.create({
   },
   roleCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#F3F4F6',
-    borderRadius: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  roleCardGradient: {
     padding: 24,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    minHeight: 180,
+    justifyContent: 'center',
   },
   roleEmoji: {
     fontSize: 48,
@@ -324,34 +390,50 @@ const styles = StyleSheet.create({
   roleTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   roleDescription: {
     fontSize: 13,
-    color: '#6B7280',
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
     lineHeight: 20,
   },
+  backLink: {
+    alignSelf: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  backLinkText: {
+    fontSize: 16,
+    color: '#FF6B35',
+    fontWeight: '600',
+  },
   form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 28,
+    padding: 24,
     marginBottom: 24,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   footer: {
     alignItems: 'center',
     marginBottom: 32,
   },
   footerText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#6B7280',
     marginBottom: 8,
   },
   footerLink: {
-    fontSize: 16,
-    color: '#FF6B6B',
-    fontWeight: '600',
+    fontSize: 17,
+    color: '#FF6B35',
+    fontWeight: '700',
   },
 });
 

@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   SafeAreaView,
   StyleSheet,
+  Pressable,
+  Animated,
+  Easing,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { supabase } from '@lib/supabase/client';
@@ -13,6 +17,41 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
 import { useFamilyStore } from '@lib/store/familyStore';
+
+// Premium Card with press animation
+const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 100,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[styles.premiumCard, style, { transform: [{ scale: scaleAnim }] }]}>
+          {children}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.premiumCard, style]}>{children}</View>;
+};
 
 export default function JoinFamily() {
   const router = useRouter();
@@ -191,7 +230,12 @@ export default function JoinFamily() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Text style={styles.icon}>🏡</Text>
+            <LinearGradient
+              colors={['#FF6B35', '#FF8F5A']}
+              style={styles.iconGradient}
+            >
+              <Text style={styles.icon}>🏡</Text>
+            </LinearGradient>
           </View>
           <Text style={styles.title}>Join a Family</Text>
           <Text style={styles.subtitle}>
@@ -200,7 +244,7 @@ export default function JoinFamily() {
         </View>
 
         <View style={styles.form}>
-          <View style={styles.card}>
+          <PremiumCard>
             <Input
               label="Family Code"
               placeholder="Enter family code"
@@ -216,7 +260,7 @@ export default function JoinFamily() {
                 Ask your family organizer to share their family code. You can find it on their dashboard.
               </Text>
             </View>
-          </View>
+          </PremiumCard>
 
           <Button
             title={loading ? 'Joining...' : 'Join Family'}
@@ -260,65 +304,77 @@ export default function JoinFamily() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FBF8F3',
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 40,
-    paddingBottom: 24,
+    paddingBottom: 120,
   },
   header: {
     alignItems: 'center',
     marginBottom: 40,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#E9D5FF',
-    borderRadius: 48,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 20,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  iconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
   icon: {
     fontSize: 48,
   },
   title: {
     fontSize: 32,
-    fontWeight: '700',
-    color: '#111827',
+    fontWeight: '800',
+    color: '#1A1A2E',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#8F92A1',
     textAlign: 'center',
     paddingHorizontal: 32,
+    fontWeight: '500',
+    lineHeight: 22,
   },
   form: {
     gap: 16,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
+  premiumCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderRadius: 28,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(255, 107, 53, 0.08)',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: 'rgba(255, 107, 53, 0.15)',
   },
   infoEmoji: {
     fontSize: 20,
@@ -327,7 +383,8 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#1E40AF',
+    color: '#8B5A3C',
     lineHeight: 20,
+    fontWeight: '500',
   },
 });

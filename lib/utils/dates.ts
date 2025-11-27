@@ -10,7 +10,11 @@ export function getToday(): string {
 
 export function getTodayDate(): string {
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  // Use local timezone, not UTC
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function isChoreForToday(repeatingDays: string[]): boolean {

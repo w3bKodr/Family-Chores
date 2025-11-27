@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, Animated, Easing, Pressable, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@lib/store/authStore';
@@ -8,6 +9,53 @@ import { supabase } from '@lib/supabase/client';
 import { Button } from '@components/Button';
 import { AlertModal } from '@components/AlertModal';
 import { EmojiPickerModal } from '@components/EmojiPickerModal';
+
+// Premium animated card wrapper
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -113,79 +161,90 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => user?.role === 'parent' && setEmojiPickerVisible(true)}
-            style={styles.avatarCircle}
-          >
-            <Text style={styles.avatarEmoji}>{currentEmoji}</Text>
-            {user?.role === 'parent' && <Text style={styles.editBadge}>✏️</Text>}
-          </TouchableOpacity>
-          {isEditingName ? (
-            <View style={styles.nameEditContainer}>
-              <TextInput
-                style={styles.nameInput}
-                value={editedName}
-                onChangeText={setEditedName}
-                autoFocus
-                placeholder="Enter your name"
-                placeholderTextColor="#9CA3AF"
-              />
-              <View style={styles.nameEditButtons}>
-                <TouchableOpacity
-                  onPress={handleUpdateName}
-                  style={styles.nameEditButton}
-                >
-                  <Ionicons name="checkmark" size={20} color="#10B981" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setIsEditingName(false);
-                    setEditedName(user?.emoji ? user?.display_name || '' : (user?.display_name?.replace(/^[^\s]+ /, '') || ''));
-                  }}
-                  style={styles.nameEditButton}
-                >
-                  <Ionicons name="close" size={20} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Premium Header with Sky Blue */}
+        <View style={styles.premiumHeader}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.headerTitle}>Profile</Text>
+              <Text style={styles.headerSubtitle}>Manage your account</Text>
             </View>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setIsEditingName(true)}
-              style={styles.nameContainer}
-            >
-              <Text style={styles.name}>{user?.emoji ? (user?.display_name || 'User') : (user?.display_name?.replace(/^[^\s]+ /, '') || 'User')}</Text>
-              <Ionicons name="pencil" size={16} color="#6B7280" style={styles.editIcon} />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.email}>{user?.email}</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{user?.role === 'parent' ? '👨‍👩‍👧 Parent' : '👶 Child'}</Text>
           </View>
         </View>
 
-        {family && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Family</Text>
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>Family Name</Text>
-              <Text style={styles.cardValue}>{family.name}</Text>
-              <Text style={styles.cardLabel}>Family Code</Text>
-              <Text style={styles.cardValue}>{family.family_code}</Text>
+        <View style={styles.content}>
+          {/* User Profile Card */}
+          <View style={styles.profileCard}>
+            <PremiumCard 
+              onPress={() => user?.role === 'parent' ? setEmojiPickerVisible(true) : undefined}
+              style={styles.avatarWrapper}
+            >
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarCircle}
+              >
+                <Text style={styles.avatarEmoji}>{currentEmoji}</Text>
+              </LinearGradient>
+              {user?.role === 'parent' && (
+                <View style={styles.editBadgeContainer}>
+                  <Text style={styles.editBadge}>✏️</Text>
+                </View>
+              )}
+            </PremiumCard>
+            {isEditingName ? (
+              <View style={styles.nameEditContainer}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  autoFocus
+                  placeholder="Enter your name"
+                  placeholderTextColor="#9CA3AF"
+                />
+                <View style={styles.nameEditButtons}>
+                  <TouchableOpacity
+                    onPress={handleUpdateName}
+                    style={[styles.nameEditButton, styles.confirmButton]}
+                  >
+                    <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsEditingName(false);
+                      setEditedName(user?.emoji ? user?.display_name || '' : (user?.display_name?.replace(/^[^\s]+ /, '') || ''));
+                    }}
+                    style={[styles.nameEditButton, styles.cancelButton]}
+                  >
+                    <Ionicons name="close" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={() => setIsEditingName(true)}
+                style={styles.nameContainer}
+              >
+                <Text style={styles.name}>{user?.emoji ? (user?.display_name || 'User') : (user?.display_name?.replace(/^[^\s]+ /, '') || 'User')}</Text>
+                <Ionicons name="pencil" size={16} color="#3B82F6" style={styles.editIcon} />
+              </TouchableOpacity>
+            )}
+            <Text style={styles.email}>{user?.email}</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>{user?.role === 'parent' ? '👨‍👩‍👧 Parent' : '👶 Child'}</Text>
             </View>
           </View>
-        )}
 
         <View style={styles.section}>
-          <Button
-            title="Sign Out"
-            onPress={handleSignOut}
-            variant="danger"
-            size="lg"
-          />
+          <PremiumCard style={styles.signOutButton} onPress={handleSignOut}>
+            <View style={styles.signOutButtonInner}>
+              <Text style={styles.signOutButtonText}>Sign Out</Text>
+            </View>
+          </PremiumCard>
         </View>
-      </View>
+        </View>
+      </ScrollView>
 
       <AlertModal
         visible={alertVisible}
@@ -209,58 +268,115 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F3',
   },
-  content: {
-    flex: 1,
-    content: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+  scrollContent: {
     paddingBottom: 100,
   },
+  
+  // ===== PREMIUM HEADER =====
+  premiumHeader: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 28,
+  },
+  
+  // Profile Card
+  profileCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 28,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+    marginBottom: 32,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
-    paddingTop: 20,
+    marginBottom: 36,
+    paddingTop: 24,
+  },
+  avatarWrapper: {
+    marginBottom: 20,
   },
   avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E5E7EB',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    position: 'relative',
+    shadowColor: 'rgba(59, 130, 246, 0.3)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8,
   },
-  editBadge: {
+  editBadgeContainer: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    fontSize: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    width: 28,
-    height: 28,
-    lineHeight: 28,
-    textAlign: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  editBadge: {
+    fontSize: 16,
   },
   avatarEmoji: {
-    fontSize: 40,
+    fontSize: 48,
   },
   nameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 10,
+    marginBottom: 8,
   },
   name: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1A1A2E',
+    letterSpacing: -0.5,
   },
   editIcon: {
     marginTop: 4,
@@ -269,74 +385,112 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 300,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   nameInput: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#1A1A2E',
     textAlign: 'center',
     borderBottomWidth: 2,
     borderBottomColor: '#3B82F6',
-    paddingBottom: 8,
+    paddingBottom: 10,
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     minWidth: 200,
   },
   nameEditButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   nameEditButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  confirmButton: {
+    backgroundColor: '#10B981',
+  },
+  cancelButton: {
+    backgroundColor: '#EF4444',
   },
   email: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#6B7280',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   roleBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   roleText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E40AF',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#3B82F6',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 12,
+    color: '#1A1A2E',
+    marginBottom: 14,
+    letterSpacing: -0.3,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   cardLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#6B7280',
-    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   cardValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 16,
+    letterSpacing: -0.3,
+  },
+  signOutButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  signOutButtonInner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  signOutButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#EF4444',
+    letterSpacing: -0.3,
   },
 });

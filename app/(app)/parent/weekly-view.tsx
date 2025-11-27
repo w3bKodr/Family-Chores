@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,63 @@ import {
   SafeAreaView,
   RefreshControl,
   TouchableOpacity,
+  Animated,
+  Easing,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { AlertModal } from '@components/AlertModal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+// Premium animated card wrapper
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function WeeklyView() {
   const router = useRouter();
@@ -84,6 +135,14 @@ export default function WeeklyView() {
         }
       >
         <View style={styles.header}>
+          <LinearGradient
+            colors={['#FF6B35', '#F7931E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerIcon}
+          >
+            <Text style={styles.headerIconText}>📅</Text>
+          </LinearGradient>
           <Text style={styles.headerTitle}>Weekly Schedule</Text>
           <Text style={styles.headerSubtitle}>All chores organized by day</Text>
         </View>
@@ -126,7 +185,7 @@ export default function WeeklyView() {
                     const isPending = completion?.status === 'pending';
 
                     return (
-                      <TouchableOpacity
+                      <PremiumCard
                         key={chore.id}
                         style={[
                           styles.choreCard,
@@ -134,7 +193,6 @@ export default function WeeklyView() {
                           isPending && styles.choreCardPending,
                         ]}
                         onPress={() => {
-                          // Navigate to edit chore
                           router.push({
                             pathname: '/(app)/parent/create-chore',
                             params: { 
@@ -180,7 +238,7 @@ export default function WeeklyView() {
                             <Text style={styles.editHint}>Edit →</Text>
                           )}
                         </View>
-                      </TouchableOpacity>
+                      </PremiumCard>
                     );
                   })}
                 </View>
@@ -204,106 +262,123 @@ export default function WeeklyView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F3',
   },
   content: {
-    padding: 16,
-    paddingTop: 20,
-    paddingBottom: 40,
+    padding: 20,
+    paddingTop: 24,
+    paddingBottom: 120,
   },
   header: {
-    paddingHorizontal: 4,
-    marginBottom: 24,
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  headerIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  headerIconText: {
+    fontSize: 40,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 17,
     color: '#6B7280',
   },
   dayCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
+    marginBottom: 20,
+    paddingBottom: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   dayTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   daySubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#6B7280',
   },
   progressCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#EEF2FF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#6366F1',
   },
   progressText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#6366F1',
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 28,
   },
   emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
+    fontSize: 44,
+    marginBottom: 10,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#9CA3AF',
+    fontWeight: '500',
   },
   choresContainer: {
-    gap: 12,
+    gap: 14,
   },
   choreCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    padding: 16,
+    backgroundColor: '#FBF8F3',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
   },
   choreCardCompleted: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.2)',
   },
   choreCardPending: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FDE68A',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.2)',
   },
   choreLeft: {
     flexDirection: 'row',
@@ -311,77 +386,84 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   choreEmoji: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    marginRight: 14,
+    shadowColor: 'rgba(0, 0, 0, 0.06)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   choreEmojiCompleted: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
   },
   choreEmojiPending: {
-    backgroundColor: '#FEF9C3',
-    borderColor: '#FDE68A',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
   },
   choreEmojiText: {
-    fontSize: 22,
+    fontSize: 24,
   },
   choreInfo: {
     flex: 1,
   },
   choreTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: -0.3,
   },
   choreMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   choreChild: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
+    fontWeight: '500',
   },
   chorePoints: {
-    backgroundColor: '#E0E7FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
   chorePointsText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#FF6B35',
   },
   choreRight: {
-    marginLeft: 8,
+    marginLeft: 10,
   },
   statusBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: 'rgba(16, 185, 129, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
   },
   statusBadgePending: {
     backgroundColor: '#F59E0B',
+    shadowColor: 'rgba(245, 158, 11, 0.3)',
   },
   statusBadgeText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#FFFFFF',
   },
   editHint: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#FF6B35',
+    fontWeight: '600',
   },
 });

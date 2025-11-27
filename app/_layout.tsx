@@ -29,7 +29,7 @@ export default function RootLayout() {
     if (!isLoggedIn && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
     } else if (isLoggedIn && (inAuthGroup || hasNoSegments)) {
-      router.replace('/(app)/parent');
+      router.replace('/(app)/parent-dashboard');
     }
   }, [session, user, segments, isReady]);
 

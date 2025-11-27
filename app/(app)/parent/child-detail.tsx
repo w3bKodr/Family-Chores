@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,14 @@ import {
   StyleSheet,
   SafeAreaView,
   RefreshControl,
-  TouchableOpacity,
+  Pressable,
+  Animated,
+  Easing,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { useAuthStore } from '@lib/store/authStore';
@@ -25,6 +30,41 @@ const { width } = Dimensions.get('window');
 const MAX_CONTENT_WIDTH = 600; // Max width for tablet/iPad
 const contentWidth = Math.min(width - 40, MAX_CONTENT_WIDTH);
 const DAY_BUTTON_WIDTH = (contentWidth - 24) / 7; // Account for gaps between buttons
+
+// Premium Card with press animation
+const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 100,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[styles.premiumCard, style, { transform: [{ scale: scaleAnim }] }]}>
+          {children}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.premiumCard, style]}>{children}</View>;
+};
 
 export default function ChildDetail() {
   const router = useRouter();
@@ -123,30 +163,73 @@ export default function ChildDetail() {
     }
   };
 
-  const getCompletionsForDay = (day: string) => {
+  // Get the start of the current week (Monday) in local timezone
+  const getStartOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  // Format date as YYYY-MM-DD in local timezone (not UTC)
+  const formatDateLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Get the date for a specific day in the current week
+  const getDateForDay = (dayName: string) => {
+    const dayIndex = FULL_DAYS.indexOf(dayName);
+    const weekStart = getStartOfWeek(new Date());
+    const targetDate = new Date(weekStart);
+    targetDate.setDate(weekStart.getDate() + dayIndex);
+    return targetDate;
+  };
+
+  // Get scheduled chores for this child on a given day
+  const getChoresForDay = (day: string) => {
     if (!child) return [];
     
-    const getDayOfWeek = (dateString: string) => {
-      const date = new Date(dateString);
-      const dayIndex = date.getDay();
-      return FULL_DAYS[dayIndex === 0 ? 6 : dayIndex - 1];
-    };
+    // Get chores assigned to this child that have this day in repeating_days
+    return chores.filter(chore => 
+      chore.assigned_to === childId && 
+      chore.repeating_days?.includes(day)
+    );
+  };
+
+  // Get completion for a specific chore on a specific date
+  const getCompletionForChore = (choreId: string, day: string) => {
+    const targetDate = getDateForDay(day);
+    const targetDateStr = formatDateLocal(targetDate);
     
-    return choreCompletions
-      .filter(cc => {
-        if (cc.completed_by !== childId) return false;
-        const completionDay = getDayOfWeek(cc.completed_date);
-        return completionDay === day;
-      })
-      .map(cc => {
-        const chore = chores.find(c => c.id === cc.chore_id);
-        return { completion: cc, chore };
-      })
-      .filter(item => item.chore);
+    return choreCompletions.find(cc => {
+      // Handle both ISO format and date-only format from database
+      const completionDateStr = cc.completed_date.includes('T') 
+        ? cc.completed_date.split('T')[0] 
+        : cc.completed_date;
+      
+      return cc.chore_id === choreId && 
+        cc.completed_by === childId &&
+        completionDateStr === targetDateStr;
+    });
+  };
+
+  // Get chores with their completion status for a day
+  const getChoresWithStatus = (day: string) => {
+    const dayChores = getChoresForDay(day);
+    
+    return dayChores.map(chore => {
+      const completion = getCompletionForChore(chore.id, day);
+      return { chore, completion };
+    });
   };
 
   const getPendingCountForDay = (day: string) => {
-    return getCompletionsForDay(day).filter(item => item.completion.status === 'pending').length;
+    return getChoresWithStatus(day).filter(item => item.completion?.status === 'pending').length;
   };
 
   const handleDeleteChild = async () => {
@@ -201,53 +284,74 @@ export default function ChildDetail() {
     );
   }
 
-  const dayCompletions = getCompletionsForDay(selectedDay);
-  const pendingCompletions = dayCompletions.filter(item => item.completion.status === 'pending');
-  const approvedCompletions = dayCompletions.filter(item => item.completion.status === 'approved');
-  const rejectedCompletions = dayCompletions.filter(item => item.completion.status === 'rejected');
+  const dayChoresWithStatus = getChoresWithStatus(selectedDay);
+  const notStartedChores = dayChoresWithStatus.filter(item => !item.completion);
+  const pendingChores = dayChoresWithStatus.filter(item => item.completion?.status === 'pending');
+  const approvedChores = dayChoresWithStatus.filter(item => item.completion?.status === 'approved');
+  const rejectedChores = dayChoresWithStatus.filter(item => item.completion?.status === 'rejected');
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Premium Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{child.display_name}</Text>
+          <TouchableOpacity 
+            onPress={() => setShowEmojiPicker(true)}
+            style={styles.editButton}
+          >
+            <Ionicons name="pencil" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+        
+        {/* Child Avatar & Points */}
+        <View style={styles.profileSection}>
+          <Pressable 
+            onPress={() => setShowEmojiPicker(true)}
+            style={styles.avatarContainer}
+          >
+            <View style={styles.avatarOuter}>
+              <View style={styles.avatarInner}>
+                <Text style={styles.avatarEmoji}>{child.emoji || '👶'}</Text>
+              </View>
+            </View>
+            <View style={styles.editBadge}>
+              <Ionicons name="pencil" size={12} color="#FFFFFF" />
+            </View>
+          </Pressable>
+          
+          {/* Points Card */}
+          <View style={styles.pointsCard}>
+            <Text style={styles.pointsLabel}>TOTAL POINTS</Text>
+            <View style={styles.pointsRow}>
+              <Text style={styles.starIcon}>⭐</Text>
+              <Text style={styles.pointsValue}>{child.points}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => router.push('/(app)/parent')}
-            style={styles.backButton}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.childHeader}>
-            <TouchableOpacity 
-              onPress={() => setShowEmojiPicker(true)}
-              style={styles.childAvatarLarge}
-            >
-              <Text style={styles.childAvatarEmojiLarge}>{child.emoji || '👶'}</Text>
-              <View style={styles.editEmojiButton}>
-                <Text style={styles.editEmojiIcon}>✏️</Text>
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.childName}>{child.display_name}</Text>
-            <View style={styles.pointsCard}>
-              <Text style={styles.pointsLabel}>Total Points</Text>
-              <Text style={styles.pointsValue}>⭐ {child.points}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Responsive Day Selector */}
+        {/* Day Selector */}
         <View style={styles.daySelectorContainer}>
-          <View style={styles.daySelectorWrapper}>
-            <View style={styles.daySelector}>
+          <View style={styles.daySelectorCard}>
+            <View style={styles.dayButtonsRow}>
               {DAYS.map((day, index) => {
                 const fullDay = FULL_DAYS[index];
                 const pendingCount = getPendingCountForDay(fullDay);
                 const isSelected = fullDay === selectedDay;
+                const isToday = fullDay === FULL_DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
                 
                 return (
                   <TouchableOpacity
@@ -255,16 +359,21 @@ export default function ChildDetail() {
                     style={[
                       styles.dayButton,
                       isSelected && styles.dayButtonSelected,
-                      { width: DAY_BUTTON_WIDTH },
+                      isToday && !isSelected && styles.dayButtonToday,
                     ]}
                     onPress={() => setSelectedDay(fullDay)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={[styles.dayButtonText, isSelected && styles.dayButtonTextSelected]}>
+                    <Text style={[
+                      styles.dayButtonText, 
+                      isSelected && styles.dayButtonTextSelected,
+                      isToday && !isSelected && styles.dayButtonTextToday,
+                    ]}>
                       {day}
                     </Text>
                     {pendingCount > 0 && (
-                      <View style={styles.dayBadge}>
-                        <Text style={styles.dayBadgeText}>{pendingCount}</Text>
+                      <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
+                        <Text style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}>{pendingCount}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -274,29 +383,73 @@ export default function ChildDetail() {
           </View>
         </View>
 
-        {/* Pending Approvals */}
-        {pendingCompletions.length > 0 && (
+        {/* Not Started Chores */}
+        {notStartedChores.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>⏳ Pending Approval</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{pendingCompletions.length}</Text>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionIconContainer, styles.sectionIconBlue]}>
+                  <Ionicons name="list" size={18} color="#0EA5E9" />
+                </View>
+                <Text style={styles.sectionTitle}>To Do</Text>
+              </View>
+              <View style={[styles.countBadge, styles.countBadgeBlue]}>
+                <Text style={[styles.countText, styles.countTextBlue]}>{notStartedChores.length}</Text>
               </View>
             </View>
             
-            {pendingCompletions.map(({ completion, chore }) => (
-              <View key={completion.id} style={styles.choreCard}>
+            {notStartedChores.map(({ chore }) => (
+              <PremiumCard key={chore.id} style={styles.choreCard}>
                 <View style={styles.choreInfo}>
-                  <View style={styles.choreEmoji}>
-                    <Text style={styles.choreEmojiText}>{chore!.emoji}</Text>
+                  <View style={[styles.choreEmoji, styles.choreEmojiNotStarted]}>
+                    <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
                   </View>
                   <View style={styles.choreDetails}>
-                    <Text style={styles.choreTitle}>{chore!.title}</Text>
-                    {chore!.description && (
-                      <Text style={styles.choreDescription}>{chore!.description}</Text>
+                    <Text style={styles.choreTitle}>{chore.title}</Text>
+                    {chore.description && (
+                      <Text style={styles.choreDescription}>{chore.description}</Text>
                     )}
                     <View style={styles.chorePoints}>
-                      <Text style={styles.chorePointsText}>+{chore!.points} points</Text>
+                      <Text style={styles.chorePointsText}>+{chore.points} points</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.notStartedBadge}>
+                  <Ionicons name="ellipse-outline" size={20} color="#8F92A1" />
+                </View>
+              </PremiumCard>
+            ))}
+          </View>
+        )}
+
+        {/* Pending Approvals */}
+        {pendingChores.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={styles.sectionIconContainer}>
+                  <Ionicons name="time" size={18} color="#F59E0B" />
+                </View>
+                <Text style={styles.sectionTitle}>Pending Approval</Text>
+              </View>
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>{pendingChores.length}</Text>
+              </View>
+            </View>
+            
+            {pendingChores.map(({ completion, chore }) => (
+              <PremiumCard key={completion!.id} style={styles.choreCard}>
+                <View style={styles.choreInfo}>
+                  <View style={styles.choreEmoji}>
+                    <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
+                  </View>
+                  <View style={styles.choreDetails}>
+                    <Text style={styles.choreTitle}>{chore.title}</Text>
+                    {chore.description && (
+                      <Text style={styles.choreDescription}>{chore.description}</Text>
+                    )}
+                    <View style={styles.chorePoints}>
+                      <Text style={styles.chorePointsText}>+{chore.points} points</Text>
                     </View>
                   </View>
                 </View>
@@ -304,43 +457,50 @@ export default function ChildDetail() {
                 <View style={styles.approvalButtons}>
                   <TouchableOpacity
                     style={styles.approveButton}
-                    onPress={() => handleApprove(completion.id)}
+                    onPress={() => handleApprove(completion!.id)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.approveButtonText}>✓</Text>
+                    <Ionicons name="checkmark" size={24} color="#FFFFFF" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.rejectButton}
-                    onPress={() => handleReject(completion.id)}
+                    onPress={() => handleReject(completion!.id)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.rejectButtonText}>✗</Text>
+                    <Ionicons name="close" size={24} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
-              </View>
+              </PremiumCard>
             ))}
           </View>
         )}
 
         {/* Approved Chores */}
-        {approvedCompletions.length > 0 && (
+        {approvedChores.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>✅ Approved</Text>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionIconContainer, styles.sectionIconGreen]}>
+                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                </View>
+                <Text style={styles.sectionTitle}>Approved</Text>
+              </View>
               <View style={[styles.countBadge, styles.countBadgeGreen]}>
-                <Text style={[styles.countText, styles.countTextGreen]}>{approvedCompletions.length}</Text>
+                <Text style={[styles.countText, styles.countTextGreen]}>{approvedChores.length}</Text>
               </View>
             </View>
             
-            {approvedCompletions.map(({ completion, chore }) => (
-              <View key={completion.id} style={[styles.choreCard, styles.choreCardApproved]}>
+            {approvedChores.map(({ completion, chore }) => (
+              <PremiumCard key={completion!.id} style={[styles.choreCard, styles.choreCardApproved]}>
                 <View style={styles.choreInfo}>
                   <View style={[styles.choreEmoji, styles.choreEmojiApproved]}>
-                    <Text style={styles.choreEmojiText}>{chore!.emoji}</Text>
+                    <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
                   </View>
                   <View style={styles.choreDetails}>
-                    <Text style={styles.choreTitle}>{chore!.title}</Text>
-                    <View style={styles.chorePoints}>
+                    <Text style={styles.choreTitle}>{chore.title}</Text>
+                    <View style={[styles.chorePoints, styles.chorePointsApprovedBg]}>
                       <Text style={[styles.chorePointsText, styles.chorePointsApproved]}>
-                        +{chore!.points} points
+                        +{chore.points} points
                       </Text>
                     </View>
                   </View>
@@ -348,43 +508,51 @@ export default function ChildDetail() {
                 <TouchableOpacity
                   style={styles.unapproveButton}
                   onPress={() => handleUnapprove(completion, chore)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.unapproveButtonText}>↺</Text>
+                  <Ionicons name="refresh" size={20} color="#FF6B35" />
                 </TouchableOpacity>
-              </View>
+              </PremiumCard>
             ))}
           </View>
         )}
 
         {/* Rejected Chores */}
-        {rejectedCompletions.length > 0 && (
+        {rejectedChores.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>❌ Rejected</Text>
+              <View style={styles.sectionTitleRow}>
+                <View style={[styles.sectionIconContainer, styles.sectionIconRed]}>
+                  <Ionicons name="close-circle" size={18} color="#EF4444" />
+                </View>
+                <Text style={styles.sectionTitle}>Rejected</Text>
+              </View>
             </View>
             
-            {rejectedCompletions.map(({ completion, chore }) => (
-              <View key={completion.id} style={[styles.choreCard, styles.choreCardRejected]}>
+            {rejectedChores.map(({ completion, chore }) => (
+              <PremiumCard key={completion!.id} style={[styles.choreCard, styles.choreCardRejected]}>
                 <View style={styles.choreInfo}>
                   <View style={[styles.choreEmoji, styles.choreEmojiRejected]}>
-                    <Text style={styles.choreEmojiText}>{chore!.emoji}</Text>
+                    <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
                   </View>
                   <View style={styles.choreDetails}>
-                    <Text style={[styles.choreTitle, styles.choreTitleRejected]}>{chore!.title}</Text>
+                    <Text style={[styles.choreTitle, styles.choreTitleRejected]}>{chore.title}</Text>
                   </View>
                 </View>
-                <Text style={styles.rejectedBadge}>✗</Text>
-              </View>
+                <View style={styles.rejectedBadge}>
+                  <Ionicons name="close" size={20} color="#EF4444" />
+                </View>
+              </PremiumCard>
             ))}
           </View>
         )}
 
-        {dayCompletions.length === 0 && (
+        {dayChoresWithStatus.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>📅</Text>
             <Text style={styles.emptyTitle}>No chores for {selectedDay}</Text>
             <Text style={styles.emptySubtitle}>
-              {child.display_name} hasn't completed any chores on this day yet.
+              {child.display_name} doesn't have any chores scheduled for this day.
             </Text>
           </View>
         )}
@@ -432,44 +600,130 @@ export default function ChildDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FE',
+    backgroundColor: '#FBF8F3',
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
-  header: {
+  premiumHeader: {
+    backgroundColor: '#0EA5E9',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingTop: 16,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#0EA5E9',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
-  backButtonText: {
-    fontSize: 16,
-    color: '#6366F1',
-    fontWeight: '600',
-  },
-  childHeader: {
-    alignItems: 'center',
-  },
-  childAvatarLarge: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#FFF4E6',
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 12,
+  },
+  editButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  avatarContainer: {
     position: 'relative',
+  },
+  avatarOuter: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInner: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEmoji: {
+    fontSize: 42,
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FF6B35',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#0EA5E9',
+  },
+  pointsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  pointsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.8)',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  pointsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  starIcon: {
+    fontSize: 20,
+  },
+  pointsValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  avatarGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   childAvatarEmojiLarge: {
     fontSize: 56,
@@ -481,113 +735,104 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#F8F9FE',
-    shadowColor: '#6366F1',
+    borderColor: '#0EA5E9',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
   },
-  editEmojiIcon: {
-    fontSize: 16,
-  },
   childName: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1A1A2E',
-    marginBottom: 16,
-  },
-  pointsCard: {
-    backgroundColor: '#6366F1',
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 24,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-    width: '100%',
-    maxWidth: 300,
-    alignItems: 'center',
-  },
-  pointsLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    opacity: 0.9,
-    marginBottom: 4,
-  },
-  pointsValue: {
-    fontSize: 48,
+    fontSize: 28,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 52,
+    marginBottom: 8,
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
   daySelectorContainer: {
     paddingHorizontal: 20,
     marginBottom: 24,
+    marginTop: 24,
   },
-  daySelectorWrapper: {
-    width: '100%',
-    maxWidth: MAX_CONTENT_WIDTH,
-    alignSelf: 'center',
+  daySelectorCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    padding: 6,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.08)',
   },
-  daySelector: {
+  dayButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 4,
+    alignItems: 'center',
   },
   dayButton: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    marginHorizontal: 2,
   },
   dayButtonSelected: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#0EA5E9',
+    shadowColor: '#0EA5E9',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  dayButtonToday: {
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
   },
   dayButtonText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
+    fontWeight: '600',
+    color: '#8F92A1',
+    letterSpacing: 0.2,
   },
   dayButtonTextSelected: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dayButtonTextToday: {
+    color: '#0EA5E9',
+    fontWeight: '700',
   },
   dayBadge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 2,
+    right: 2,
     backgroundColor: '#EF4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    borderWidth: 2,
-    borderColor: '#F8F9FE',
+    paddingHorizontal: 4,
+  },
+  dayBadgeSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  dayBadgeTextSelected: {
+    color: '#0EA5E9',
   },
   dayBadgeText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
   },
   section: {
@@ -600,53 +845,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sectionIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionIconGreen: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  sectionIconRed: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  sectionIconBlue: {
+    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+  },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#1A1A2E',
+    letterSpacing: -0.3,
   },
   countBadge: {
-    backgroundColor: '#FFE5E5',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   countBadgeGreen: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  countBadgeBlue: {
+    backgroundColor: 'rgba(14, 165, 233, 0.15)',
   },
   countText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FF6B6B',
+    color: '#F59E0B',
   },
   countTextGreen: {
     color: '#10B981',
   },
+  countTextBlue: {
+    color: '#0EA5E9',
+  },
+  premiumCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
   choreCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
     padding: 18,
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   choreCardApproved: {
-    borderColor: '#D1FAE5',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#10B981',
-    shadowOpacity: 0.08,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
   },
   choreCardRejected: {
-    borderColor: '#FFE5E5',
-    backgroundColor: '#FEF2F2',
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(254, 242, 242, 0.8)',
     opacity: 0.7,
   },
   choreInfo: {
@@ -658,18 +932,23 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(251, 248, 243, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
   choreEmojiApproved: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     borderWidth: 2,
-    borderColor: '#D1FAE5',
+    borderColor: 'rgba(16, 185, 129, 0.2)',
   },
   choreEmojiRejected: {
-    backgroundColor: '#FFE5E5',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  choreEmojiNotStarted: {
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(14, 165, 233, 0.15)',
   },
   choreEmojiText: {
     fontSize: 28,
@@ -682,6 +961,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A2E',
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   choreTitleRejected: {
     textDecorationLine: 'line-through',
@@ -689,23 +969,26 @@ const styles = StyleSheet.create({
   },
   choreDescription: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#8F92A1',
     marginBottom: 6,
   },
   chorePoints: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
+  chorePointsApprovedBg: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
   chorePointsText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FF6B6B',
+    color: '#FF6B35',
   },
   chorePointsApproved: {
-    color: '#059669',
+    color: '#10B981',
   },
   approvalButtons: {
     flexDirection: 'row',
@@ -719,10 +1002,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   approveButtonText: {
     fontSize: 22,
@@ -737,38 +1020,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   rejectButtonText: {
     fontSize: 22,
     color: '#FFFFFF',
     fontWeight: '700',
   },
-  approvedBadge: {
-    fontSize: 32,
-    color: '#10B981',
-  },
   unapproveButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FCD34D',
-  },
-  unapproveButtonText: {
-    fontSize: 20,
-    color: '#92400E',
-    fontWeight: '700',
+    borderColor: 'rgba(255, 107, 53, 0.3)',
   },
   rejectedBadge: {
-    fontSize: 32,
-    color: '#EF4444',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notStartedBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(143, 146, 161, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyState: {
     paddingHorizontal: 20,
@@ -784,6 +1070,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1A1A2E',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   emptySubtitle: {
     fontSize: 15,
@@ -791,12 +1078,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
     lineHeight: 22,
+    fontWeight: '500',
   },
   dangerZone: {
     paddingHorizontal: 20,
     paddingTop: 24,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: 'rgba(239, 68, 68, 0.1)',
     marginTop: 24,
   },
   error: {

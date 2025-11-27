@@ -10,7 +10,6 @@ export default function ParentLayout() {
       <Stack.Screen name="create-chore" />
       <Stack.Screen name="child-detail" />
       <Stack.Screen name="weekly-view" />
-      <Stack.Screen name="rewards" />
     </Stack>
   );
 }

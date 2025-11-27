@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,52 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Pressable,
+  Animated,
+  Easing,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
+
+// Premium Card with press animation
+const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 100,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[styles.premiumCard, style, { transform: [{ scale: scaleAnim }] }]}>
+          {children}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.premiumCard, style]}>{children}</View>;
+};
 
 export default function CreateFamily() {
   const router = useRouter();
@@ -64,7 +103,12 @@ export default function CreateFamily() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <View style={styles.iconCircle}>
-              <Text style={styles.emoji}>👨‍👩‍👧‍👦</Text>
+              <LinearGradient
+                colors={['#FF6B35', '#FF8F5A']}
+                style={styles.iconGradient}
+              >
+                <Text style={styles.emoji}>👨‍👩‍👧‍👦</Text>
+              </LinearGradient>
             </View>
             <Text style={styles.title}>Create Family</Text>
             <Text style={styles.subtitle}>
@@ -72,29 +116,29 @@ export default function CreateFamily() {
             </Text>
           </View>
 
-          <View style={styles.form}>
+          <PremiumCard>
             <Input
               label="Family Name"
               placeholder="e.g., The Smiths"
               value={familyName}
               onChangeText={setFamilyName}
             />
+          </PremiumCard>
 
-            <Button
-              title={loading ? 'Creating...' : 'Create Family'}
-              onPress={handleCreateFamily}
-              disabled={loading}
-              variant="primary"
-              size="lg"
-            />
+          <Button
+            title={loading ? 'Creating...' : 'Create Family'}
+            onPress={handleCreateFamily}
+            disabled={loading}
+            variant="primary"
+            size="lg"
+          />
 
-            <Button
-              title="Cancel"
-              onPress={() => router.back()}
-              variant="ghost"
-              size="lg"
-            />
-          </View>
+          <Button
+            title="Cancel"
+            onPress={() => router.back()}
+            variant="ghost"
+            size="lg"
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -112,7 +156,7 @@ export default function CreateFamily() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FBF8F3',
   },
   flex1: {
     flex: 1,
@@ -121,39 +165,58 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 40,
+    paddingBottom: 120,
   },
   header: {
     alignItems: 'center',
     marginBottom: 40,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#FFE5E5',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 24,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  iconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
   },
   emoji: {
     fontSize: 48,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#1A1A2E',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#8F92A1',
     textAlign: 'center',
+    fontWeight: '500',
   },
-  form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 4,
+  premiumCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 28,
+    padding: 24,
     marginBottom: 24,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
 });
 

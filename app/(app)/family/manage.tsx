@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,11 @@ import {
   Platform,
   TouchableOpacity,
   TextInput,
+  Animated,
+  Easing,
+  Pressable,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -20,6 +24,53 @@ import { Button } from '@components/Button';
 import { Card } from '@components/Card';
 import { ConfirmModal } from '@components/ConfirmModal';
 import { AlertModal } from '@components/AlertModal';
+
+// Premium animated card wrapper
+const PremiumCard = ({ 
+  children, 
+  style, 
+  onPress, 
+}: { 
+  children: React.ReactNode; 
+  style?: any; 
+  onPress?: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+  
+  if (!onPress) {
+    return <View style={style}>{children}</View>;
+  }
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function ManageFamilyScreen() {
   const router = useRouter();
@@ -284,25 +335,24 @@ export default function ManageFamilyScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Family</Text>
-          <Text style={styles.headerSubtitle}>Manage your family settings</Text>
+        {/* Premium Header with Orange Gradient */}
+        <View style={styles.premiumHeader}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.headerTitle}>Family</Text>
+              <Text style={styles.headerSubtitle}>Manage your family settings</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleShareCode}
+              style={styles.premiumNotificationButton}
+            >
+              <Ionicons name="share-social" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Family Info Card */}
         <View style={styles.familyCard}>
-          <TouchableOpacity
-            onPress={handleShareCode}
-            style={styles.shareButton}
-          >
-            <Text style={styles.shareButtonText}>Share Family</Text>
-            <View style={styles.shareIconCircle}>
-              <Ionicons name="share-outline" size={16} color="#3B82F6" />
-            </View>
-          </TouchableOpacity>
-          <View style={styles.familyIconContainer}>
-            <Text style={styles.familyIcon}>👨‍👩‍👧‍👦</Text>
-          </View>
           {isEditingName ? (
             <View style={styles.nameEditContainer}>
               <TextInput
@@ -549,138 +599,187 @@ export default function ManageFamilyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FBF8F3',
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
     paddingBottom: 100,
   },
+  
+  // ===== PREMIUM HEADER =====
+  premiumHeader: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  premiumNotificationButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  // Not Parent View
   notParentContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
     paddingTop: 40,
     paddingBottom: 100,
   },
   notParentIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  notParentIcon: {
-    fontSize: 36,
-  },
-  notParentTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  notParentSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 12,
-    maxWidth: 420,
-  },
-  notParentCard: {
-    width: '100%',
-    maxWidth: 640,
-    alignItems: 'center',
-  },
-  notParentActions: {
-    flexDirection: 'row',
-    marginTop: 12,
-    width: '100%',
-  },
-  header: {
-    marginBottom: 32,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  
-  // Family Card
-  familyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    position: 'relative',
-  },
-  shareButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  shareButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3B82F6',
-  },
-  shareIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  familyIconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 20,
+  },
+  notParentIcon: {
+    fontSize: 40,
+  },
+  notParentTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 10,
+    letterSpacing: -0.5,
+  },
+  notParentSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
     marginBottom: 16,
+    maxWidth: 420,
+    lineHeight: 24,
+  },
+  notParentCard: {
+    width: '100%',
+    maxWidth: 640,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 28,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  notParentActions: {
+    flexDirection: 'row',
+    marginTop: 12,
+    width: '100%',
+  },
+  
+  // Family Info Card
+  familyCard: {
+    backgroundColor: 'rgba(254, 226, 226, 0.6)',
+    borderRadius: 28,
+    padding: 28,
+    marginHorizontal: 20,
+    marginTop: 28,
+    marginBottom: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    shadowColor: 'rgba(239, 68, 68, 0.15)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+    position: 'relative',
+  },
+  shareButton: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    display: 'none',
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF6B35',
+    display: 'none',
+  },
+  shareIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    display: 'none',
+  },
+  familyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   familyIcon: {
-    fontSize: 40,
+    fontSize: 44,
   },
   nameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 18,
+    gap: 10,
   },
   familyName: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: '#1F2937',
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   editIcon: {
     marginTop: 4,
   },
   nameEditContainer: {
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 18,
     alignItems: 'center',
   },
   nameInput: {
@@ -689,20 +788,20 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     textAlign: 'center',
     borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
-    paddingBottom: 8,
+    borderBottomColor: '#FF6B35',
+    paddingBottom: 10,
     paddingHorizontal: 16,
     minWidth: 200,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   nameEditButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   nameEditButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -712,274 +811,268 @@ const styles = StyleSheet.create({
   },
   codeLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#6B7280',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
   codeBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
+    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 16,
   },
   codeText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#92400E',
-    letterSpacing: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FF6B35',
+    letterSpacing: 2,
   },
   
   // Section
   section: {
     marginBottom: 32,
+    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#1A1A2E',
+    letterSpacing: -0.3,
   },
   countBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
   countText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1E40AF',
+    color: '#8B5CF6',
   },
   requestBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
   },
   
   // Parents Grid
   parentsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
   },
   parentCard: {
-    width: '48%',
+    width: '47%',
     flexDirection: 'column',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    padding: 20,
+    borderRadius: 24,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
     position: 'relative',
   },
   parentAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E0E7FF',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   parentAvatarText: {
-    color: '#4F46E5',
-    fontSize: 28,
+    color: '#8B5CF6',
+    fontSize: 30,
     fontWeight: '700',
   },
   parentInfo: {
     alignItems: 'center',
   },
   parentName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
+    color: '#1A1A2E',
+    marginBottom: 10,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   parentBadges: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   ownerBadge: {
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   ownerBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#92400E',
   },
   youBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   youBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#1E40AF',
+    color: '#8B5CF6',
   },
   removeButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEE2E2',
+    top: 10,
+    right: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FECACA',
   },
   removeButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 
   // Empty State
   emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 28,
+    padding: 36,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#F3F4F6',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     borderStyle: 'dashed',
   },
   emptyEmoji: {
-    fontSize: 56,
-    marginBottom: 16,
+    fontSize: 60,
+    marginBottom: 18,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
+    color: '#1A1A2E',
+    marginBottom: 10,
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   
   // Children Grid
   childrenGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 14,
   },
   childCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    width: '48%',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 20,
+    width: '47%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   childIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#DBEAFE',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   childEmoji: {
-    fontSize: 28,
+    fontSize: 30,
   },
   childName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
+    color: '#1A1A2E',
+    marginBottom: 10,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   pointsBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
   },
   pointsText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#8B5CF6',
   },
   addChildCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 16,
-    width: '48%',
+    backgroundColor: '#FBF8F3',
+    borderRadius: 24,
+    padding: 20,
+    width: '47%',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(0, 0, 0, 0.06)',
     borderStyle: 'dashed',
   },
   addChildIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E5E7EB',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   addChildEmoji: {
-    fontSize: 28,
+    fontSize: 30,
   },
   addChildText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#6B7280',
   },
   
   // Request Card
   requestCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   requestInfo: {
     flexDirection: 'row',
@@ -987,92 +1080,102 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   requestIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEE2E2',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   requestEmoji: {
-    fontSize: 20,
+    fontSize: 22,
   },
   requestDetails: {
     flex: 1,
   },
   requestEmail: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 2,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 4,
+    letterSpacing: -0.3,
   },
   requestTime: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
   },
   requestActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   approveButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: 'rgba(16, 185, 129, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
   },
   approveText: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#FFFFFF',
     fontWeight: '700',
   },
   rejectButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: 'rgba(239, 68, 68, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 4,
   },
   rejectText: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#FFFFFF',
     fontWeight: '700',
   },
   
   // Danger Zone
   dangerZone: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
+    backgroundColor: 'rgba(239, 68, 68, 0.06)',
+    borderRadius: 24,
+    padding: 24,
+    marginHorizontal: 20,
   },
   dangerTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: '#991B1B',
-    marginBottom: 12,
+    marginBottom: 14,
+    letterSpacing: -0.3,
   },
   leaveButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 18,
+    padding: 18,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderWidth: 2,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
   },
   leaveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#DC2626',
+    letterSpacing: -0.3,
   },
   leaveButtonIcon: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#DC2626',
   },
   
@@ -1081,6 +1184,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 26,
   },
 });

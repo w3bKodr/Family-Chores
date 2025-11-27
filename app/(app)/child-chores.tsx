@@ -69,10 +69,10 @@ const PremiumCard = ({
   );
 };
 
-export default function TodayScreen() {
+export default function ChildChoresScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { family, chores, children, choreCompletions, completeChore, getChores, getChoreCompletions } = useFamilyStore();
+  const { family, chores, children, choreCompletions, completeChore, getChores, getChoreCompletions, getChildren, getFamily } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
   const [child, setChild] = useState<any>(null);
@@ -99,6 +99,13 @@ export default function TodayScreen() {
     loadActiveChild();
   }, []);
 
+  // Fetch family data if not already loaded
+  useEffect(() => {
+    if (user?.family_id && !family) {
+      getFamily(user.family_id);
+    }
+  }, [user, family]);
+
   useEffect(() => {
     if (activeChildId) {
       const activeChild = children.find((c) => c.id === activeChildId);
@@ -122,6 +129,7 @@ export default function TodayScreen() {
     if (!family?.id) return;
     try {
       await Promise.all([
+        getChildren(family.id),
         getChores(family.id),
         getChoreCompletions(family.id),
       ]);
@@ -153,9 +161,9 @@ export default function TodayScreen() {
     }
   };
 
-  const todayChores = chores.filter(
-    (c) => c.assigned_to === child?.id && c.repeating_days.includes(selectedDay)
-  );
+  const todayChores = child ? chores.filter(
+    (c) => c.assigned_to === child.id && c.repeating_days?.includes(selectedDay)
+  ) : [];
 
   const isToday = selectedDay === today;
 
@@ -202,77 +210,48 @@ export default function TodayScreen() {
               <Text style={styles.headerTitle}>{isToday ? "Today's Chores" : `${selectedDay}'s Chores`}</Text>
               <Text style={styles.headerSubtitle}>{isToday ? "Let's get things done!" : "Plan ahead"}</Text>
             </View>
-            {activeChildId && (
-              <Pressable
-                onPress={handleSwitchToParentMode}
-                style={styles.premiumNotificationButton}
-              >
-                <Text style={styles.switchEmoji}>👨‍👩‍👧</Text>
-              </Pressable>
-            )}
           </View>
         </View>
 
-        {child && (
-          <View style={styles.pointsCard}>
-            <LinearGradient
-              colors={['#8B5CF6', '#7C3AED']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.pointsCardGradient}
-            >
-              <View style={styles.pointsIconCircle}>
-                <Text style={styles.pointsIcon}>⭐</Text>
-              </View>
-              <View style={styles.pointsContent}>
-                <Text style={styles.pointsLabel}>Your Points</Text>
-                <Text style={styles.pointsValue}>{child.points}</Text>
-              </View>
-            </LinearGradient>
-          </View>
-        )}
-
         {/* Day Selector */}
         <View style={styles.daySelectorContainer}>
-          <View style={styles.daySelectorGrid}>
-            {DAYS.map((day) => {
-              const dayChores = chores.filter(
-                (c) => c.assigned_to === child?.id && c.repeating_days.includes(day)
-              );
-              return (
-                <Pressable
-                  key={day}
-                  onPress={() => setSelectedDay(day)}
-                  style={[
-                    styles.dayButton,
-                    selectedDay === day && styles.dayButtonActive,
-                  ]}
-                >
-                  <Text style={[
-                    styles.dayButtonText,
-                    selectedDay === day && styles.dayButtonTextActive,
-                  ]}>
-                    {day.slice(0, 3)}
-                  </Text>
-                  {day === today && (
-                    <View style={styles.todayIndicator}>
-                      <Text style={styles.todayIndicatorText}>Today</Text>
-                    </View>
-                  )}
-                  {dayChores.length > 0 && (
-                    <View style={[
-                      styles.choreCountBadge,
-                      selectedDay === day && styles.choreCountBadgeActive
+          <View style={styles.daySelectorCard}>
+            <View style={styles.dayButtonsRow}>
+              {DAYS.map((day) => {
+                const dayChores = child ? chores.filter(
+                  (c) => c.assigned_to === child.id && c.repeating_days?.includes(day)
+                ) : [];
+                const isSelected = selectedDay === day;
+                const isDayToday = day === today;
+                
+                return (
+                  <Pressable
+                    key={day}
+                    onPress={() => setSelectedDay(day)}
+                    style={[
+                      styles.dayButton,
+                      isSelected && styles.dayButtonSelected,
+                      isDayToday && !isSelected && styles.dayButtonToday,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.dayButtonText,
+                      isSelected && styles.dayButtonTextSelected,
+                      isDayToday && !isSelected && styles.dayButtonTextToday,
                     ]}>
-                      <Text style={[
-                        styles.choreCountText,
-                        selectedDay === day && styles.choreCountTextActive
-                      ]}>{dayChores.length}</Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+                      {day.slice(0, 3)}
+                    </Text>
+                    {dayChores.length > 0 && (
+                      <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
+                        <Text style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}>
+                          {dayChores.length}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
 
@@ -432,129 +411,87 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  // Points Card (purple gradient like rewards)
-  pointsCard: {
-    marginHorizontal: 20,
-    marginTop: 28,
-    borderRadius: 28,
-    overflow: 'hidden',
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  pointsCardGradient: {
-    padding: 26,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pointsIconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 18,
-  },
-  pointsIcon: {
-    fontSize: 34,
-  },
-  pointsContent: {
-    flex: 1,
-  },
-  pointsLabel: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    opacity: 0.9,
-    marginBottom: 6,
-  },
-  pointsValue: {
-    color: '#FFFFFF',
-    fontSize: 50,
-    fontWeight: '800',
-    lineHeight: 54,
-    letterSpacing: -1,
-  },
-
-  // Day Selector (responsive grid)
+  // Day Selector (card style matching child-detail)
   daySelectorContainer: {
-    marginTop: 28,
-    marginBottom: 24,
     paddingHorizontal: 20,
+    marginBottom: 24,
+    marginTop: 24,
   },
-  daySelectorGrid: {
+  daySelectorCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    padding: 6,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.08)',
+  },
+  dayButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 6,
+    alignItems: 'center',
   },
   dayButton: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    alignItems: 'center',
-    borderWidth: 0.5,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
-    shadowColor: 'rgba(0, 0, 0, 0.04)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  dayButtonActive: {
-    backgroundColor: '#8B5CF6',
-    shadowColor: 'rgba(139, 92, 246, 0.3)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 16,
-    borderColor: '#8B5CF6',
-  },
-  dayButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#8F92A1',
-    marginBottom: 2,
-    letterSpacing: -0.3,
-  },
-  dayButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  todayIndicator: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 2,
-  },
-  todayIndicatorText: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  choreCountBadge: {
-    marginTop: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: 'transparent',
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
   },
-  choreCountBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  dayButtonSelected: {
+    backgroundColor: '#8B5CF6',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  choreCountText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8B5CF6',
+  dayButtonToday: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
   },
-  choreCountTextActive: {
+  dayButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8F92A1',
+    letterSpacing: 0.2,
+  },
+  dayButtonTextSelected: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dayButtonTextToday: {
+    color: '#8B5CF6',
+    fontWeight: '700',
+  },
+  dayBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#8B5CF6',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dayBadgeSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  dayBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  dayBadgeTextSelected: {
+    color: '#8B5CF6',
   },
   
   // Chores Container

@@ -69,7 +69,7 @@ const PremiumCard = ({
   );
 };
 
-export default function RewardsScreen() {
+export default function ParentRewardsScreen() {
   const router = useRouter();
   const { family, rewards, children, getRewards, createReward, updateReward, deleteReward, loading } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -192,25 +192,22 @@ export default function RewardsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Premium Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Rewards</Text>
+            <Text style={styles.headerSubtitle}>Manage family rewards</Text>
+          </View>
+        </View>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        <View style={styles.headerContainer}>
-          <LinearGradient
-            colors={['#FF6B35', '#F7931E']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconCircle}
-          >
-            <Text style={styles.icon}>🎁</Text>
-          </LinearGradient>
-          <Text style={styles.heading}>Rewards</Text>
-          <Text style={styles.subtitle}>Manage family rewards</Text>
-        </View>
-
         {showForm && (
           <View style={styles.formCard}>
             <View style={styles.formSection}>
@@ -241,7 +238,7 @@ export default function RewardsScreen() {
 
             <PremiumCard style={styles.primaryButton} onPress={handleSaveReward}>
               <LinearGradient
-                colors={['#FF6B35', '#F7931E']}
+                colors={['#8B5CF6', '#A78BFA']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.primaryButtonGradient}
@@ -265,7 +262,7 @@ export default function RewardsScreen() {
           <View style={styles.addButtonContainer}>
             <PremiumCard style={styles.primaryButton} onPress={() => setShowForm(true)}>
               <LinearGradient
-                colors={['#FF6B35', '#F7931E']}
+                colors={['#8B5CF6', '#A78BFA']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.primaryButtonGradient}
@@ -356,42 +353,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FBF8F3',
   },
+  premiumHeader: {
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
   content: {
     padding: 20,
     paddingTop: 24,
     paddingBottom: 120,
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingTop: 8,
-  },
-  iconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: 'rgba(255, 107, 53, 0.3)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  icon: {
-    fontSize: 42,
-  },
-  heading: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1A1A2E',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 17,
-    color: '#8F92A1',
-    fontWeight: '500',
   },
   addButtonContainer: {
     marginBottom: 24,
@@ -427,7 +423,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FFF4E6',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -447,14 +443,14 @@ const styles = StyleSheet.create({
   },
   pointsBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 14,
   },
   rewardPoints: {
     fontSize: 14,
-    color: '#FF6B35',
+    color: '#8B5CF6',
     fontWeight: '700',
   },
   deleteButton: {
@@ -530,14 +526,14 @@ const styles = StyleSheet.create({
   },
   changeLinkText: {
     fontSize: 16,
-    color: '#FF6B35',
+    color: '#8B5CF6',
     fontWeight: '600',
   },
   primaryButton: {
     borderRadius: 18,
     overflow: 'hidden',
     marginTop: 8,
-    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowColor: 'rgba(139, 92, 246, 0.3)',
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
     elevation: 4,
@@ -561,7 +557,7 @@ const styles = StyleSheet.create({
   },
   cancelLinkText: {
     fontSize: 16,
-    color: '#FF6B35',
+    color: '#8B5CF6',
     fontWeight: '600',
   },
 });

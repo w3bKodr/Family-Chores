@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   SafeAreaView,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  Animated,
+  Easing,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -14,6 +17,41 @@ import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { AlertModal } from '@components/AlertModal';
 import { EmojiPickerModal } from '@components/EmojiPickerModal';
+
+// Premium Card with press animation
+const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.96,
+      duration: 100,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 200,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[styles.premiumCard, style, { transform: [{ scale: scaleAnim }] }]}>
+          {children}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
+  return <View style={[styles.premiumCard, style]}>{children}</View>;
+};
 
 export default function AddChild() {
   const router = useRouter();
@@ -66,7 +104,12 @@ export default function AddChild() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <Text style={styles.icon}>{selectedEmoji}</Text>
+            <LinearGradient
+              colors={['#FF6B35', '#FF8F5A']}
+              style={styles.iconGradient}
+            >
+              <Text style={styles.icon}>{selectedEmoji}</Text>
+            </LinearGradient>
           </View>
           <Text style={styles.title}>Add Child</Text>
           <Text style={styles.subtitle}>
@@ -74,15 +117,15 @@ export default function AddChild() {
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <PremiumCard>
           <Text style={styles.sectionLabel}>Choose Avatar</Text>
-          <TouchableOpacity
+          <Pressable
             style={styles.emojiSelector}
             onPress={() => setShowEmojiPicker(true)}
           >
             <Text style={styles.selectedEmoji}>{selectedEmoji}</Text>
             <Text style={styles.changeLinkText}>Tap to change</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           <Input
             label="Child's Name"
@@ -97,7 +140,7 @@ export default function AddChild() {
               This child won't have their own login. You can switch to their view from your account to manage their chores.
             </Text>
           </View>
-        </View>
+        </PremiumCard>
 
         <Button
           title={loading ? 'Adding...' : 'Add Child'}
@@ -137,29 +180,34 @@ export default function AddChild() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FE',
+    backgroundColor: '#FBF8F3',
   },
   scrollContent: {
     padding: 20,
     paddingTop: 24,
+    paddingBottom: 120,
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
   },
   iconCircle: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#FFF4E6',
-    borderRadius: 48,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 20,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  iconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
   },
   icon: {
     fontSize: 56,
@@ -169,6 +217,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1A1A2E',
     marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,
@@ -176,32 +225,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
     fontWeight: '500',
+    lineHeight: 22,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
+  premiumCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 24,
-    borderRadius: 20,
+    borderRadius: 28,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   sectionLabel: {
     fontSize: 15,
     fontWeight: '700',
     color: '#1A1A2E',
     marginBottom: 16,
+    letterSpacing: -0.3,
   },
   emojiSelector: {
     alignItems: 'center',
     paddingVertical: 24,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
+    backgroundColor: 'rgba(251, 248, 243, 0.8)',
+    borderRadius: 20,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: 'rgba(255, 107, 53, 0.2)',
   },
   selectedEmoji: {
     fontSize: 72,
@@ -209,17 +262,17 @@ const styles = StyleSheet.create({
   },
   changeLinkText: {
     fontSize: 14,
-    color: '#6366F1',
+    color: '#FF6B35',
     fontWeight: '600',
   },
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(255, 107, 53, 0.08)',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: 'rgba(255, 107, 53, 0.15)',
   },
   infoEmoji: {
     fontSize: 20,
@@ -228,7 +281,7 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: '#1E40AF',
+    color: '#8B5A3C',
     lineHeight: 20,
     fontWeight: '500',
   },

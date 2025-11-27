@@ -561,8 +561,8 @@ export default function ParentDashboard() {
                     
                     {/* Text Content */}
                     <View style={styles.modernTextBlock}>
-                      <Text style={styles.modernActionTitle}>Manage Chores</Text>
-                      <Text style={styles.modernActionSubtitle}>View schedule</Text>
+                      <Text style={styles.modernActionTitle}>Chores</Text>
+                      <Text style={styles.modernActionSubtitle}>Manage schedule</Text>
                     </View>
                   </LinearGradient>
                 </PremiumCard>
@@ -617,7 +617,7 @@ export default function ParentDashboard() {
                     </View>
                     <View style={styles.premiumTileContent}>
                       <Text style={styles.premiumTileTitle}>Switch to Child Mode</Text>
-                      <Text style={styles.premiumTileSubtitle}>View and complete chores as your child</Text>
+                      <Text style={styles.premiumTileSubtitle}>Hand the device to your child – they can do chores, earn rewards, and more</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={26} color="#FFFFFF" style={{ opacity: 0.9 }} />
                   </LinearGradient>
@@ -1370,7 +1370,6 @@ const styles = StyleSheet.create({
     color: '#78350F',
     textAlign: 'center',
     marginBottom: 12,
-    lineHeight: 24,
   },
   pendingRequestFamilyName: {
     fontWeight: '800',
@@ -1864,4 +1863,3 @@ const styles = StyleSheet.create({
   },
   // Legacy compatibility styles end here
 });
-
