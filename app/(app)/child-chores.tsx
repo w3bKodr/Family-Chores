@@ -275,23 +275,25 @@ export default function ChildChoresScreen() {
               </Text>
             </View>
             {todayChores.map((chore, index) => {
-              const isCompleted = choreCompletions.some(
+              const completion = choreCompletions.find(
                 (cc) => cc.chore_id === chore.id && cc.completed_date === selectedDate
               );
+              const isCompleted = completion?.status === 'approved';
+              const isPending = completion?.status === 'pending';
 
               return (
                 <View key={chore.id} style={styles.choreCard}>
                   <View style={styles.choreCardHeader}>
                     <View style={[
                       styles.choreEmojiCircle,
-                      isCompleted && styles.choreEmojiCircleCompleted
+                      (isCompleted || isPending) && styles.choreEmojiCircleCompleted
                     ]}>
                       <Text style={styles.choreEmoji}>{chore.emoji}</Text>
                     </View>
                     <View style={styles.choreInfo}>
                       <Text style={[
                         styles.choreTitle,
-                        isCompleted && styles.choreTitleCompleted
+                        (isCompleted || isPending) && styles.choreTitleCompleted
                       ]}>
                         {chore.title}
                       </Text>
@@ -307,6 +309,10 @@ export default function ChildChoresScreen() {
                   {isCompleted ? (
                     <View style={styles.completedBanner}>
                       <Text style={styles.completedText}>✓ Completed!</Text>
+                    </View>
+                  ) : isPending ? (
+                    <View style={styles.pendingBanner}>
+                      <Text style={styles.pendingText}>⏳ Pending Approval</Text>
                     </View>
                   ) : isToday ? (
                     <PremiumCard 
@@ -605,6 +611,18 @@ const styles = StyleSheet.create({
   },
   completedText: {
     color: '#047857',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  pendingBanner: {
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 18,
+    padding: 18,
+    alignItems: 'center',
+  },
+  pendingText: {
+    color: '#B45309',
     fontSize: 17,
     fontWeight: '700',
     letterSpacing: -0.3,

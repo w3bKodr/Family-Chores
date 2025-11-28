@@ -67,6 +67,9 @@ export interface RewardClaim {
   reward_id: string;
   child_id: string;
   claimed_at: string;
+  status: 'pending' | 'approved' | 'rejected';
+  approved_by: string | null;
+  approved_at: string | null;
 }
 
 export interface JoinRequest {

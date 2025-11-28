@@ -18,6 +18,7 @@ import { useAuthStore } from '@lib/store/authStore';
 import { supabase } from '@lib/supabase/client';
 import { AlertModal } from '@components/AlertModal';
 import { EmojiPickerModal } from '@components/EmojiPickerModal';
+import { PinInputModal } from '@components/PinInputModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Premium animated card wrapper
@@ -70,7 +71,7 @@ const PremiumCard = ({
 export default function ChildProfileScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { children, getChildren, family, getFamily } = useFamilyStore();
+  const { children, getChildren, family, getFamily, verifyParentPin, hasParentPin } = useFamilyStore();
   const [child, setChild] = useState<any>(null);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
   const [alertVisible, setAlertVisible] = useState(false);
@@ -79,6 +80,8 @@ export default function ChildProfileScreen() {
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
   const [currentEmoji, setCurrentEmoji] = useState('👶');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [hasPinSet, setHasPinSet] = useState(false);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -98,12 +101,20 @@ export default function ChildProfileScreen() {
     }
   }, [user, family]);
 
-  // Fetch children when family is available
+  // Fetch children when family is available and check PIN status
   useEffect(() => {
     if (family?.id) {
       getChildren(family.id);
+      checkPinStatus();
     }
   }, [family]);
+
+  const checkPinStatus = async () => {
+    if (family?.id) {
+      const hasPin = await hasParentPin(family.id);
+      setHasPinSet(hasPin);
+    }
+  };
 
   useEffect(() => {
     // Try to find child by active_child_id first, then by user_id
@@ -158,8 +169,30 @@ export default function ChildProfileScreen() {
   };
 
   const handleExitChildMode = async () => {
-    await AsyncStorage.removeItem('active_child_id');
-    router.replace('/(app)/parent-dashboard');
+    // If PIN is set, require PIN verification
+    if (hasPinSet) {
+      setShowPinModal(true);
+    } else {
+      // No PIN set, exit directly
+      await AsyncStorage.removeItem('active_child_id');
+      router.replace('/(app)/parent-dashboard');
+    }
+  };
+
+  const handlePinSubmit = async (pin: string) => {
+    if (!family?.id) return;
+    
+    const isValid = await verifyParentPin(family.id, pin);
+    if (isValid) {
+      setShowPinModal(false);
+      // Delay navigation to allow modal to close first
+      setTimeout(async () => {
+        await AsyncStorage.removeItem('active_child_id');
+        router.replace('/(app)/parent-dashboard');
+      }, 100);
+    } else {
+      showAlert('Incorrect PIN', 'The PIN you entered is incorrect.', 'error');
+    }
   };
 
   return (
@@ -267,6 +300,14 @@ export default function ChildProfileScreen() {
         onSelectEmoji={handleEmojiSelect}
         selectedEmoji={currentEmoji}
         childMode={true}
+      />
+
+      <PinInputModal
+        visible={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSubmit={handlePinSubmit}
+        title="Enter PIN"
+        description="Enter your parent PIN to exit child mode"
       />
 
       <AlertModal

@@ -47,14 +47,22 @@ export default function PendingRequestsScreen() {
   const { user } = useAuthStore();
   const {
     family,
+    children,
+    rewards,
+    rewardClaims,
     joinRequests,
     parentJoinRequests,
+    getChildren,
     getJoinRequests,
     getParentJoinRequests,
+    getRewards,
+    getRewardClaims,
     approveJoinRequest,
     rejectJoinRequest,
     approveParentJoinRequest,
     rejectParentJoinRequest,
+    approveRewardClaim,
+    rejectRewardClaim,
     getParents,
   } = useFamilyStore();
 
@@ -79,8 +87,11 @@ export default function PendingRequestsScreen() {
     if (!user?.family_id) return;
     try {
       await Promise.all([
+        getChildren(user.family_id),
         getJoinRequests(user.family_id),
         getParentJoinRequests(user.family_id),
+        getRewards(user.family_id),
+        getRewardClaims(user.family_id),
       ]);
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed to load requests', 'error');
@@ -133,6 +144,27 @@ export default function PendingRequestsScreen() {
       showAlert('Error', error.message || 'Failed', 'error');
     }
   };
+
+  const handleApproveRewardClaim = async (id: string) => {
+    try {
+      await approveRewardClaim(id, user?.id || '');
+      showAlert('Success', 'Reward approved! Points deducted.', 'success');
+    } catch (error: any) {
+      showAlert('Error', error.message || 'Failed', 'error');
+    }
+  };
+
+  const handleRejectRewardClaim = async (id: string) => {
+    try {
+      await rejectRewardClaim(id, user?.id || '');
+      showAlert('Success', 'Reward request declined', 'success');
+    } catch (error: any) {
+      showAlert('Error', error.message || 'Failed', 'error');
+    }
+  };
+
+  // Filter pending reward claims
+  const pendingRewardClaims = rewardClaims.filter(c => c.status === 'pending');
 
   if (!user?.family_id) {
     return (
@@ -206,7 +238,34 @@ export default function PendingRequestsScreen() {
           </View>
         )}
 
-        {parentJoinRequests.length === 0 && joinRequests.length === 0 && (
+        {pendingRewardClaims.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🎁 Reward Requests</Text>
+            {pendingRewardClaims.map((claim: any) => {
+              const reward = rewards.find(r => r.id === claim.reward_id);
+              const child = children.find(c => c.id === claim.child_id);
+              return (
+                <PremiumCard key={claim.id} style={styles.requestCard}>
+                  <View style={styles.rewardClaimInfo}>
+                    <View style={styles.rewardClaimHeader}>
+                      <Text style={styles.rewardEmoji}>{reward?.emoji || '🎁'}</Text>
+                      <View style={styles.rewardClaimDetails}>
+                        <Text style={styles.requestName}>{reward?.title || 'Unknown Reward'}</Text>
+                        <Text style={styles.requestMeta}>{child?.display_name || 'Unknown'} • {reward?.points_required || 0} pts</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.requestActions}>
+                    <Pressable onPress={() => handleApproveRewardClaim(claim.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
+                    <Pressable onPress={() => handleRejectRewardClaim(claim.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
+                  </View>
+                </PremiumCard>
+              );
+            })}
+          </View>
+        )}
+
+        {parentJoinRequests.length === 0 && joinRequests.length === 0 && pendingRewardClaims.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>✨</Text>
             <Text style={styles.emptyTitle}>All caught up!</Text>
@@ -381,5 +440,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#8F92A1',
     fontWeight: '500',
+  },
+  rewardClaimInfo: {
+    flex: 1,
+  },
+  rewardClaimHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rewardEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  rewardClaimDetails: {
+    flex: 1,
   },
 });

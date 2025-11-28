@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PinInputModal } from '@components/PinInputModal';
+import { AlertModal } from '@components/AlertModal';
 
 // Premium Card with press animation
 const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
@@ -55,7 +57,68 @@ const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; 
 export default function SwitchToChild() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { children } = useFamilyStore();
+  const { children, family, setParentPin, hasParentPin } = useFamilyStore();
+  
+  // PIN states
+  const [hasPinSet, setHasPinSet] = useState(false);
+  const [showSetPinModal, setShowSetPinModal] = useState(false);
+  const [showConfirmPinModal, setShowConfirmPinModal] = useState(false);
+  const [firstPin, setFirstPin] = useState('');
+  
+  // Alert states
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+
+  const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  useEffect(() => {
+    checkPinStatus();
+  }, [family]);
+
+  const checkPinStatus = async () => {
+    if (family?.id) {
+      const hasPin = await hasParentPin(family.id);
+      setHasPinSet(hasPin);
+    }
+  };
+
+  const handleSetPin = (pin: string) => {
+    if (pin.length !== 4) {
+      showAlert('Invalid PIN', 'PIN must be exactly 4 digits', 'error');
+      return;
+    }
+    setFirstPin(pin);
+    setShowSetPinModal(false);
+    setShowConfirmPinModal(true);
+  };
+
+  const handleConfirmPin = async (pin: string) => {
+    if (pin !== firstPin) {
+      showAlert('PIN Mismatch', 'PINs do not match. Please try again.', 'error');
+      setFirstPin('');
+      setShowConfirmPinModal(false);
+      return;
+    }
+
+    try {
+      if (family?.id) {
+        await setParentPin(family.id, pin);
+        setHasPinSet(true);
+        showAlert('PIN Set', 'Your child mode PIN has been set successfully!', 'success');
+      }
+    } catch (error: any) {
+      showAlert('Error', error.message || 'Failed to set PIN', 'error');
+    }
+    setFirstPin('');
+    setShowConfirmPinModal(false);
+  };
 
   const handleSelectChild = async (childId: string) => {
     // Store selected child ID in AsyncStorage
@@ -145,6 +208,44 @@ export default function SwitchToChild() {
           )}
         </View>
 
+        {/* PIN Settings Section */}
+        <Text style={styles.sectionTitle}>🔐 PIN Settings</Text>
+        
+        <PremiumCard
+          onPress={() => setShowSetPinModal(true)}
+          style={styles.pinCard}
+        >
+          <View style={styles.pinCardInner}>
+            <View style={[styles.pinIconContainer, hasPinSet && styles.pinIconContainerActive]}>
+              <Ionicons 
+                name={hasPinSet ? "lock-closed" : "lock-open"} 
+                size={24} 
+                color={hasPinSet ? "#10B981" : "#F59E0B"} 
+              />
+            </View>
+            <View style={styles.pinInfo}>
+              <Text style={styles.pinTitle}>
+                {hasPinSet ? 'Change Exit PIN' : 'Set Exit PIN'}
+              </Text>
+              <Text style={styles.pinSubtitle}>
+                {hasPinSet 
+                  ? 'PIN is required to exit child mode' 
+                  : 'Require a PIN to exit child mode'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </View>
+        </PremiumCard>
+
+        {!hasPinSet && (
+          <View style={styles.warningCard}>
+            <Ionicons name="warning" size={20} color="#F59E0B" />
+            <Text style={styles.warningText}>
+              Without a PIN, children can exit child mode freely
+            </Text>
+          </View>
+        )}
+
         {/* Bottom Cancel Button */}
         <TouchableOpacity 
           onPress={() => router.back()}
@@ -153,6 +254,34 @@ export default function SwitchToChild() {
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* PIN Modals */}
+      <PinInputModal
+        visible={showSetPinModal}
+        onClose={() => setShowSetPinModal(false)}
+        onSubmit={handleSetPin}
+        title={hasPinSet ? "Change PIN" : "Set PIN"}
+        description="Enter a 4-digit PIN to lock child mode"
+      />
+
+      <PinInputModal
+        visible={showConfirmPinModal}
+        onClose={() => {
+          setShowConfirmPinModal(false);
+          setFirstPin('');
+        }}
+        onSubmit={handleConfirmPin}
+        title="Confirm PIN"
+        description="Enter the same PIN again to confirm"
+      />
+
+      <AlertModal
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -253,6 +382,7 @@ const styles = StyleSheet.create({
   },
   childList: {
     gap: 14,
+    marginBottom: 28,
   },
   childCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -349,5 +479,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8F92A1',
     fontWeight: '600',
+  },
+  // PIN Card Styles
+  pinCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    marginBottom: 12,
+    shadowColor: 'rgba(0, 0, 0, 0.06)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 4,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  pinCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  pinIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  pinIconContainerActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  pinInfo: {
+    flex: 1,
+  },
+  pinTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 2,
+  },
+  pinSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  warningCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#B45309',
+    fontWeight: '500',
   },
 });

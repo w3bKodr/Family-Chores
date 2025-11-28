@@ -50,6 +50,8 @@ interface FamilyState {
   // Reward claim actions
   claimReward: (rewardId: string, childId: string) => Promise<void>;
   getRewardClaims: (familyId: string) => Promise<void>;
+  approveRewardClaim: (claimId: string, approverId: string) => Promise<void>;
+  rejectRewardClaim: (claimId: string, approverId: string) => Promise<void>;
   
   // Join requests
   getJoinRequests: (familyId: string) => Promise<void>;
@@ -62,6 +64,11 @@ interface FamilyState {
   approveParentJoinRequest: (requestId: string) => Promise<void>;
   rejectParentJoinRequest: (requestId: string) => Promise<void>;
   cancelParentJoinRequest: (requestId: string) => Promise<void>;
+  
+  // Parent PIN for child mode
+  setParentPin: (familyId: string, pin: string) => Promise<void>;
+  verifyParentPin: (familyId: string, pin: string) => Promise<boolean>;
+  hasParentPin: (familyId: string) => Promise<boolean>;
   
   setFamily: (family: Family | null) => void;
   setError: (error: string | null) => void;
@@ -526,26 +533,22 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
         throw new Error('Not enough points');
       }
 
-      // Deduct points and create claim
-      const { error: updateError } = await supabase
-        .from('children')
-        .update({ points: child.points - reward.points_required })
-        .eq('id', childId);
-
-      if (updateError) throw updateError;
-
+      // Create claim request (points NOT deducted until approved)
       const { data, error } = await supabase
         .from('reward_claims')
-        .insert({ reward_id: rewardId, child_id: childId })
+        .insert({ 
+          reward_id: rewardId, 
+          child_id: childId,
+          status: 'pending'
+        })
         .select()
         .single();
 
       if (error) throw error;
 
-      const { rewardClaims, children } = get();
+      const { rewardClaims } = get();
       set({
         rewardClaims: [...rewardClaims, data],
-        children: children.map(c => c.id === childId ? { ...c, points: child.points - reward.points_required } : c),
       });
     } catch (error: any) {
       set({ error: error.message });
@@ -572,6 +575,93 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       set({ error: error.message });
     } finally {
       set({ loading: false });
+    }
+  },
+
+  approveRewardClaim: async (claimId: string, approverId: string) => {
+    set({ error: null });
+    try {
+      // Get the claim first
+      const claim = get().rewardClaims.find(c => c.id === claimId);
+      if (!claim) throw new Error('Claim not found');
+
+      // Get reward and child
+      const reward = get().rewards.find(r => r.id === claim.reward_id);
+      const child = get().children.find(c => c.id === claim.child_id);
+      if (!reward || !child) throw new Error('Reward or child not found');
+
+      // Check if child still has enough points
+      if (child.points < reward.points_required) {
+        throw new Error('Child no longer has enough points');
+      }
+
+      // Deduct points from child
+      const { error: updateError } = await supabase
+        .from('children')
+        .update({ points: child.points - reward.points_required })
+        .eq('id', claim.child_id);
+
+      if (updateError) throw updateError;
+
+      // Update claim status
+      const { error } = await supabase
+        .from('reward_claims')
+        .update({ 
+          status: 'approved',
+          approved_by: approverId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', claimId);
+
+      if (error) throw error;
+
+      // Update local state
+      const { rewardClaims, children } = get();
+      set({
+        rewardClaims: rewardClaims.map(c => 
+          c.id === claimId 
+            ? { ...c, status: 'approved' as const, approved_by: approverId, approved_at: new Date().toISOString() }
+            : c
+        ),
+        children: children.map(c => 
+          c.id === claim.child_id 
+            ? { ...c, points: child.points - reward.points_required }
+            : c
+        ),
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  rejectRewardClaim: async (claimId: string, approverId: string) => {
+    set({ error: null });
+    try {
+      // Update claim status (no points deducted)
+      const { error } = await supabase
+        .from('reward_claims')
+        .update({ 
+          status: 'rejected',
+          approved_by: approverId,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', claimId);
+
+      if (error) throw error;
+
+      // Update local state
+      const { rewardClaims } = get();
+      set({
+        rewardClaims: rewardClaims.map(c => 
+          c.id === claimId 
+            ? { ...c, status: 'rejected' as const, approved_by: approverId, approved_at: new Date().toISOString() }
+            : c
+        ),
+      });
+    } catch (error: any) {
+      set({ error: error.message });
+      throw error;
     }
   },
 
@@ -785,6 +875,61 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       console.error('Error cancelling parent join request:', error);
       set({ error: error.message });
       throw error;
+    }
+  },
+
+  setParentPin: async (familyId: string, pin: string) => {
+    set({ error: null });
+    try {
+      const { error } = await supabase
+        .from('families')
+        .update({ parent_pin: pin })
+        .eq('id', familyId);
+
+      if (error) throw error;
+
+      // Update local family state
+      const { family } = get();
+      if (family && family.id === familyId) {
+        set({ family: { ...family, parent_pin: pin } });
+      }
+    } catch (error: any) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  verifyParentPin: async (familyId: string, pin: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('families')
+        .select('parent_pin')
+        .eq('id', familyId)
+        .single();
+
+      if (error) throw error;
+
+      return data?.parent_pin === pin;
+    } catch (error: any) {
+      console.error('Error verifying PIN:', error);
+      return false;
+    }
+  },
+
+  hasParentPin: async (familyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('families')
+        .select('parent_pin')
+        .eq('id', familyId)
+        .single();
+
+      if (error) throw error;
+
+      return !!data?.parent_pin;
+    } catch (error: any) {
+      console.error('Error checking PIN:', error);
+      return false;
     }
   },
 

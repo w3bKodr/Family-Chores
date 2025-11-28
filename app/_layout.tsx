@@ -3,16 +3,25 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@lib/store/authStore';
 import { registerForPushNotificationsAsync } from '@lib/notifications/setup';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const { checkSession, user, session } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
       await checkSession();
+      
+      // Check if there's an active child mode session
+      const activeChildId = await AsyncStorage.getItem('active_child_id');
+      if (activeChildId) {
+        setInitialRoute('/(app)/child-dashboard');
+      }
+      
       setIsReady(true);
     };
     init();
@@ -29,7 +38,13 @@ export default function RootLayout() {
     if (!isLoggedIn && !inAuthGroup) {
       router.replace('/(auth)/sign-in');
     } else if (isLoggedIn && (inAuthGroup || hasNoSegments)) {
-      router.replace('/(app)/parent-dashboard');
+      // Use initial route if set (child mode), otherwise default to parent dashboard
+      if (initialRoute) {
+        router.replace(initialRoute as any);
+        setInitialRoute(null); // Clear after using
+      } else {
+        router.replace('/(app)/parent-dashboard');
+      }
     }
   }, [session, user, segments, isReady]);
 

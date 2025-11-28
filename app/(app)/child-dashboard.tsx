@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { useAuthStore } from '@lib/store/authStore';
 import { AlertModal } from '@components/AlertModal';
+import { PinInputModal } from '@components/PinInputModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getToday, getTodayDate } from '@lib/utils/dates';
 
@@ -95,6 +96,9 @@ const GlowingStarsPanel = ({ points, duration = 2500 }: { points: number; durati
       if (animationRef.current) {
         animationRef.current.stop();
       }
+      bounceAnim.stopAnimation();
+      glowAnim.stopAnimation();
+      numberGlow.stopAnimation();
     };
   }, [duration]);
   
@@ -219,7 +223,7 @@ const PremiumCard = ({
 export default function ChildDashboard() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { family, chores, children, choreCompletions, getChores, getChoreCompletions, getChildren, getFamily } = useFamilyStore();
+  const { family, chores, children, choreCompletions, getChores, getChoreCompletions, getChildren, getFamily, verifyParentPin, hasParentPin } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
   const [child, setChild] = useState<any>(null);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
@@ -227,6 +231,8 @@ export default function ChildDashboard() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [hasPinSet, setHasPinSet] = useState(false);
 
   const today = getToday();
   const todayDate = getTodayDate();
@@ -272,8 +278,16 @@ export default function ChildDashboard() {
   useEffect(() => {
     if (family?.id) {
       loadData();
+      checkPinStatus();
     }
   }, [family, child]);
+
+  const checkPinStatus = async () => {
+    if (family?.id) {
+      const hasPin = await hasParentPin(family.id);
+      setHasPinSet(hasPin);
+    }
+  };
 
   const loadActiveChild = async () => {
     const childId = await AsyncStorage.getItem('active_child_id');
@@ -325,8 +339,30 @@ export default function ChildDashboard() {
     : 0;
 
   const handleExitChildMode = async () => {
-    await AsyncStorage.removeItem('active_child_id');
-    router.replace('/(app)/parent-dashboard');
+    // If PIN is set, require PIN verification
+    if (hasPinSet) {
+      setShowPinModal(true);
+    } else {
+      // No PIN set, exit directly
+      await AsyncStorage.removeItem('active_child_id');
+      router.replace('/(app)/parent-dashboard');
+    }
+  };
+
+  const handlePinSubmit = async (pin: string) => {
+    if (!family?.id) return;
+    
+    const isValid = await verifyParentPin(family.id, pin);
+    if (isValid) {
+      setShowPinModal(false);
+      // Delay navigation to allow modal to close first
+      setTimeout(async () => {
+        await AsyncStorage.removeItem('active_child_id');
+        router.replace('/(app)/parent-dashboard');
+      }, 100);
+    } else {
+      showAlert('Incorrect PIN', 'The PIN you entered is incorrect.', 'error');
+    }
   };
 
   return (
@@ -440,6 +476,14 @@ export default function ChildDashboard() {
           </View>
         </View>
       </ScrollView>
+
+      <PinInputModal
+        visible={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSubmit={handlePinSubmit}
+        title="Enter PIN"
+        description="Enter your parent PIN to exit child mode"
+      />
 
       <AlertModal
         visible={alertVisible}

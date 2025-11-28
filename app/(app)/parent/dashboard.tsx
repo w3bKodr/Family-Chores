@@ -80,10 +80,14 @@ const SparkleEffect = () => {
     useRef(new Animated.Value(0)).current,
     useRef(new Animated.Value(0)).current,
   ];
+  const isMounted = useRef(true);
   
   useEffect(() => {
+    isMounted.current = true;
+    
     const createSparkleLoop = (anim: Animated.Value, delay: number) => {
       const loop = () => {
+        if (!isMounted.current) return;
         Animated.sequence([
           Animated.delay(delay),
           Animated.parallel([
@@ -101,7 +105,9 @@ const SparkleEffect = () => {
               useNativeDriver: true,
             }),
           ]),
-        ]).start(() => loop());
+        ]).start(() => {
+          if (isMounted.current) loop();
+        });
       };
       loop();
     };
@@ -109,6 +115,11 @@ const SparkleEffect = () => {
     createSparkleLoop(sparkleAnims[0], 0);
     createSparkleLoop(sparkleAnims[1], 300);
     createSparkleLoop(sparkleAnims[2], 600);
+    
+    return () => {
+      isMounted.current = false;
+      sparkleAnims.forEach(anim => anim.stopAnimation());
+    };
   }, []);
   
   return (
@@ -139,16 +150,25 @@ const SparkleEffect = () => {
 // Three glowing golden stars with smooth wave motion
 const GoldenStars = ({ points }: { points: number }) => {
   const waveAnim = useRef(new Animated.Value(0)).current;
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   
   useEffect(() => {
-    Animated.loop(
+    animationRef.current = Animated.loop(
       Animated.timing(waveAnim, {
         toValue: 1,
         duration: 800,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    animationRef.current.start();
+    
+    return () => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+      waveAnim.stopAnimation();
+    };
   }, []);
   
   // Each star gets a phase offset to create the wave effect
@@ -225,7 +245,7 @@ const GoldenStars = ({ points }: { points: number }) => {
 export default function ParentDashboard() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { family, children, choreCompletions, joinRequests, parentJoinRequests, getFamily, getChildren, getChoreCompletions, getParentJoinRequests, cancelParentJoinRequest } = useFamilyStore();
+  const { family, children, choreCompletions, joinRequests, parentJoinRequests, rewardClaims, getFamily, getChildren, getChoreCompletions, getJoinRequests, getParentJoinRequests, getRewardClaims, cancelParentJoinRequest } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -234,7 +254,8 @@ export default function ParentDashboard() {
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   
   // Animation for star badge bounce
-  const starBounceAnim = useState(new Animated.Value(0))[0];
+  const starBounceAnim = useRef(new Animated.Value(0)).current;
+  const starBounceAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -245,7 +266,7 @@ export default function ParentDashboard() {
 
   useEffect(() => {
     // Trigger star bounce animation on mount
-    Animated.loop(
+    starBounceAnimRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(starBounceAnim, {
           toValue: 1,
@@ -260,8 +281,16 @@ export default function ParentDashboard() {
           useNativeDriver: true,
         }),
       ])
-    ).start();
-  }, [starBounceAnim]);
+    );
+    starBounceAnimRef.current.start();
+    
+    return () => {
+      if (starBounceAnimRef.current) {
+        starBounceAnimRef.current.stop();
+      }
+      starBounceAnim.stopAnimation();
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.family_id) {
@@ -282,7 +311,9 @@ export default function ParentDashboard() {
         getFamily(user.family_id),
         getChildren(user.family_id),
         getChoreCompletions(user.family_id),
+        getJoinRequests(user.family_id),
         getParentJoinRequests(user.family_id),
+        getRewardClaims(user.family_id),
       ]);
     } catch (error: any) {
       showAlert('Error', error.message);
@@ -340,6 +371,19 @@ export default function ParentDashboard() {
       showAlert('Error', error.message, 'error');
     }
   };
+
+  // Calculate total pending notifications
+  const pendingRewardClaimsCount = rewardClaims?.filter(c => !c.status || c.status === 'pending')?.length || 0;
+  const totalPendingNotifications = (parentJoinRequests?.length || 0) + (joinRequests?.length || 0) + pendingRewardClaimsCount;
+  
+  // Debug log
+  console.log('Dashboard notifications:', { 
+    parentJoinRequests: parentJoinRequests?.length, 
+    joinRequests: joinRequests?.length, 
+    rewardClaims: rewardClaims?.length,
+    pendingRewardClaimsCount,
+    totalPendingNotifications 
+  });
 
   if (!user?.family_id) {
     return (
@@ -440,11 +484,11 @@ export default function ParentDashboard() {
               <View style={styles.notificationGlow}>
                 <Ionicons name="notifications" size={22} color="#FFFFFF" />
               </View>
-              { (parentJoinRequests?.length || 0) + (joinRequests?.length || 0) > 0 && (
+              {totalPendingNotifications > 0 && (
                 <View style={styles.premiumNotificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{(parentJoinRequests?.length || 0) + (joinRequests?.length || 0)}</Text>
+                  <Text style={styles.notificationBadgeText}>{totalPendingNotifications}</Text>
                 </View>
-              ) }
+              )}
             </TouchableOpacity>
           </View>
         </View>

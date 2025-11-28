@@ -9,7 +9,6 @@ import {
   Animated,
   Easing,
   Pressable,
-  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,397 +16,6 @@ import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { AlertModal } from '@components/AlertModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Sparkling gift icon with twinkling sparkle nearby
-const SparklingGift = () => {
-  const twinkleAnim = useRef(new Animated.Value(0)).current;
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    // Twinkling effect - quick pulse
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(twinkleAnim, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(twinkleAnim, {
-          toValue: 0.2,
-          duration: 200,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(twinkleAnim, {
-          toValue: 0.8,
-          duration: 250,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(twinkleAnim, {
-          toValue: 0.3,
-          duration: 150,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.delay(100),
-      ])
-    ).start();
-    
-    // Float up and down
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: 800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-  
-  return (
-    <Animated.Text
-      style={[
-        styles.sparklingGift,
-        {
-          opacity: twinkleAnim.interpolate({
-            inputRange: [0, 1],
-            outputRange: [0.4, 1],
-          }),
-          transform: [
-            {
-              translateY: floatAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [5, -8],
-              }),
-            },
-            {
-              scale: twinkleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.8, 1.3],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      ✨
-    </Animated.Text>
-  );
-};
-
-// Firework emoji that sprays from right side and fades/shrinks at halfway
-const FlyingEmoji = ({ emoji, delay, topPosition, duration, angle }: { 
-  emoji: string; 
-  delay: number; 
-  topPosition: number;
-  duration: number;
-  angle: number; // spray angle in degrees
-}) => {
-  const flyAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  
-  useEffect(() => {
-    const startFly = () => {
-      flyAnim.setValue(0);
-      scaleAnim.setValue(1);
-      
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          // Fly outward with deceleration (like firework)
-          Animated.timing(flyAnim, {
-            toValue: 1,
-            duration: duration,
-            easing: Easing.out(Easing.cubic), // Decelerates like real firework
-            useNativeDriver: true,
-          }),
-          // Shrink as it travels
-          Animated.timing(scaleAnim, {
-            toValue: 0.3,
-            duration: duration,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start(() => {
-        // Restart immediately with tiny random offset for natural feel
-        setTimeout(startFly, Math.random() * 200);
-      });
-    };
-    
-    startFly();
-  }, []);
-  
-  // Calculate spray direction - spreading from right to left
-  const maxDistance = SCREEN_WIDTH * 0.38; // Travel further left
-  // Angle determines vertical spread: 0 = straight left, positive = up-left, negative = down-left
-  const yOffset = angle * maxDistance * 0.015; // Convert angle to vertical offset
-  
-  return (
-    <Animated.Text
-      style={[
-        styles.flyingEmoji,
-        {
-          top: topPosition,
-          opacity: flyAnim.interpolate({
-            inputRange: [0, 0.1, 0.6, 1],
-            outputRange: [0, 1, 0.7, 0],
-          }),
-          transform: [
-            {
-              translateX: flyAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, -maxDistance], // Move left
-              }),
-            },
-            {
-              translateY: flyAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, yOffset], // Spread vertically based on angle
-              }),
-            },
-            {
-              scale: scaleAnim,
-            },
-            {
-              rotate: flyAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0deg', `${angle > 0 ? -30 : 30}deg`],
-              }),
-            },
-          ],
-        },
-      ]}
-    >
-      {emoji}
-    </Animated.Text>
-  );
-};
-
-// Container for all flying emojis - continuous spray pattern
-const FlyingEmojis = () => {
-  const configs = [
-    // Continuous spray - staggered to always have emojis visible
-    { emoji: '🌟', delay: 0, top: 35, duration: 1800, angle: -12 },
-    { emoji: '💫', delay: 150, top: 40, duration: 1600, angle: 0 },
-    { emoji: '⭐', delay: 300, top: 45, duration: 2000, angle: 12 },
-    { emoji: '💎', delay: 450, top: 38, duration: 1700, angle: -6 },
-    { emoji: '✨', delay: 600, top: 42, duration: 1500, angle: 6 },
-    { emoji: '🎁', delay: 750, top: 40, duration: 1900, angle: 2 },
-    { emoji: '🌟', delay: 900, top: 36, duration: 1800, angle: -14 },
-    { emoji: '⭐', delay: 1050, top: 44, duration: 1600, angle: 14 },
-    { emoji: '✨', delay: 1200, top: 39, duration: 1700, angle: -4 },
-    { emoji: '💫', delay: 1350, top: 41, duration: 1800, angle: 8 },
-  ];
-  
-  return (
-    <>
-      {configs.map((config, i) => (
-        <FlyingEmoji
-          key={i}
-          emoji={config.emoji}
-          delay={config.delay}
-          topPosition={config.top}
-          duration={config.duration}
-          angle={config.angle}
-        />
-      ))}
-    </>
-  );
-};
-
-// Keep FloatingSparkles as a fallback (not used anymore)
-const FloatingSparkles = () => {
-  // Create multiple animation values for more complex movement
-  const particles = [0, 1, 2, 3, 4, 5];
-  const floatAnims = particles.map(() => useRef(new Animated.Value(Math.random())).current);
-  const wobbleAnims = particles.map(() => useRef(new Animated.Value(Math.random() * 2 - 1)).current);
-  const pulseAnims = particles.map(() => useRef(new Animated.Value(Math.random())).current);
-  const spinAnims = particles.map(() => useRef(new Animated.Value(0)).current);
-  
-  useEffect(() => {
-    particles.forEach((_, i) => {
-      // Truly random timing for each particle
-      const baseSpeed = 1800 + Math.random() * 1500;
-      const floatDuration = baseSpeed + Math.random() * 800;
-      const wobbleDuration = baseSpeed * 0.7 + Math.random() * 600;
-      const pulseDuration = baseSpeed * 0.5 + Math.random() * 400;
-      const spinDuration = baseSpeed * 2 + Math.random() * 2000;
-      const startDelay = Math.random() * 500;
-      
-      // Vertical floating - random direction start
-      const floatUp = Math.random() > 0.5;
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(startDelay),
-          Animated.timing(floatAnims[i], {
-            toValue: floatUp ? 1 : 0,
-            duration: floatDuration,
-            easing: Easing.bezier(0.4, 0, 0.2, 1),
-            useNativeDriver: true,
-          }),
-          Animated.timing(floatAnims[i], {
-            toValue: floatUp ? 0 : 1,
-            duration: floatDuration * (0.8 + Math.random() * 0.4),
-            easing: Easing.bezier(0.4, 0, 0.2, 1),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      
-      // Horizontal wobble - asymmetric movement
-      const wobbleDir = Math.random() > 0.5 ? 1 : -1;
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(startDelay + Math.random() * 200),
-          Animated.timing(wobbleAnims[i], {
-            toValue: wobbleDir,
-            duration: wobbleDuration,
-            easing: Easing.bezier(0.33, 0, 0.67, 1),
-            useNativeDriver: true,
-          }),
-          Animated.timing(wobbleAnims[i], {
-            toValue: -wobbleDir * 0.6,
-            duration: wobbleDuration * 0.8,
-            easing: Easing.bezier(0.33, 0, 0.67, 1),
-            useNativeDriver: true,
-          }),
-          Animated.timing(wobbleAnims[i], {
-            toValue: wobbleDir * 0.3,
-            duration: wobbleDuration * 0.5,
-            easing: Easing.bezier(0.33, 0, 0.67, 1),
-            useNativeDriver: true,
-          }),
-          Animated.timing(wobbleAnims[i], {
-            toValue: 0,
-            duration: wobbleDuration * 0.4,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      
-      // Scale pulse - irregular breathing
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(startDelay + Math.random() * 100),
-          Animated.timing(pulseAnims[i], {
-            toValue: 1,
-            duration: pulseDuration,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.delay(Math.random() * 200),
-          Animated.timing(pulseAnims[i], {
-            toValue: 0.3 + Math.random() * 0.3,
-            duration: pulseDuration * 1.2,
-            easing: Easing.inOut(Easing.cubic),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnims[i], {
-            toValue: 0,
-            duration: pulseDuration * 0.8,
-            easing: Easing.in(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      
-      // Gentle spin for some particles
-      if (i % 2 === 0) {
-        Animated.loop(
-          Animated.timing(spinAnims[i], {
-            toValue: 1,
-            duration: spinDuration,
-            easing: Easing.linear,
-            useNativeDriver: true,
-          })
-        ).start();
-      }
-    });
-  }, []);
-  
-  const emojis = ['✨', '🌟', '💫', '⭐', '🌟', '💎'];
-  // Positioned in the CENTER of header only (avoiding left text and right icon)
-  // Left side ends around 55%, right icon starts around 75%
-  const configs = [
-    { left: '32%', top: -5, size: 28, floatRange: 25, wobbleRange: 12 },
-    { left: '48%', top: 70, size: 32, floatRange: 30, wobbleRange: 15 },
-    { left: '38%', top: 40, size: 26, floatRange: 22, wobbleRange: 10 },
-    { left: '55%', top: 15, size: 30, floatRange: 28, wobbleRange: 14 },
-    { left: '42%', top: 95, size: 24, floatRange: 20, wobbleRange: 8 },
-    { left: '60%', top: 55, size: 26, floatRange: 24, wobbleRange: 11 },
-  ];
-  
-  return (
-    <>
-      {particles.map((_, i) => {
-        const config = configs[i];
-        return (
-          <Animated.Text
-            key={i}
-            style={[
-              styles.floatingSparkle,
-              { fontSize: config.size },
-              { left: config.left, top: config.top },
-              {
-                opacity: pulseAnims[i].interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.6, 1],
-                }),
-                transform: [
-                  {
-                    translateY: floatAnims[i].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [config.floatRange / 2, -config.floatRange],
-                    }),
-                  },
-                  {
-                    translateX: wobbleAnims[i].interpolate({
-                      inputRange: [-1, 0, 1],
-                      outputRange: [-config.wobbleRange, 0, config.wobbleRange],
-                    }),
-                  },
-                  {
-                    scale: pulseAnims[i].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 1.2],
-                    }),
-                  },
-                  {
-                    rotate: i % 2 === 0 
-                      ? spinAnims[i].interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg'],
-                        })
-                      : wobbleAnims[i].interpolate({
-                          inputRange: [-1, 0, 1],
-                          outputRange: ['-20deg', '0deg', '20deg'],
-                        }),
-                  },
-                ],
-              },
-            ]}
-          >
-            {emojis[i]}
-          </Animated.Text>
-        );
-      })}
-    </>
-  );
-};
 
 // Glowing Stars Panel - matching dashboard
 const GlowingStarsPanel = ({ points, duration = 2500 }: { points: number; duration?: number }) => {
@@ -479,6 +87,9 @@ const GlowingStarsPanel = ({ points, duration = 2500 }: { points: number; durati
       if (animationRef.current) {
         animationRef.current.stop();
       }
+      bounceAnim.stopAnimation();
+      glowAnim.stopAnimation();
+      numberGlow.stopAnimation();
     };
   }, [duration]);
   
@@ -657,13 +268,21 @@ export default function ChildRewardsScreen() {
 
     try {
       await claimReward(rewardId, child.id);
-      showAlert('Success', 'You claimed a reward!', 'success');
+      showAlert('Request Sent!', 'Your parent will review your reward request.', 'success');
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
     }
   };
 
   const myClaims = rewardClaims.filter((rc) => rc.child_id === child?.id);
+  const pendingClaims = myClaims.filter((rc) => rc.status === 'pending');
+  const approvedClaims = myClaims.filter((rc) => rc.status === 'approved');
+  const rejectedClaims = myClaims.filter((rc) => rc.status === 'rejected');
+
+  // Helper to get reward info for a claim
+  const getRewardForClaim = (claim: typeof myClaims[0]) => {
+    return rewards.find(r => r.id === claim.reward_id);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -673,19 +292,16 @@ export default function ChildRewardsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Premium Header with flying emojis and sparkling gift */}
+        {/* Premium Header */}
         <View style={styles.premiumHeader}>
-          <FlyingEmojis />
           <View style={styles.headerTop}>
-            <View style={styles.headerLeftContent}>
-              <View style={styles.giftIconContainer}>
-                <Text style={styles.giftIcon}>🎁</Text>
-                <SparklingGift />
-              </View>
-              <View>
-                <Text style={styles.headerTitle}>Rewards</Text>
-                <Text style={styles.headerSubtitle}>Claim amazing prizes!</Text>
-              </View>
+            <View>
+              <Text style={styles.headerTitle}>Rewards</Text>
+              <Text style={styles.headerSubtitle}>Claim amazing prizes!</Text>
+            </View>
+            <View style={styles.headerIconCircle}>
+              <Text style={styles.giftIcon}>🎁</Text>
+              <Text style={styles.sparkle}>✨</Text>
             </View>
           </View>
         </View>
@@ -706,9 +322,10 @@ export default function ChildRewardsScreen() {
             </View>
           ) : (
             rewards.map((reward) => {
-              const claimed = myClaims.some((rc) => rc.reward_id === reward.id);
-              const canClaim = !claimed && child && child.points >= reward.points_required;
-              const notEnoughPoints = !claimed && child && child.points < reward.points_required;
+              const hasPendingClaim = pendingClaims.some((rc) => rc.reward_id === reward.id);
+              const hasApprovedClaim = approvedClaims.some((rc) => rc.reward_id === reward.id);
+              const canClaim = !hasPendingClaim && child && child.points >= reward.points_required;
+              const notEnoughPoints = !hasPendingClaim && child && child.points < reward.points_required;
 
               return (
                 <View key={reward.id} style={[styles.rewardCard, canClaim && styles.rewardCardCanClaim]}>
@@ -729,9 +346,10 @@ export default function ChildRewardsScreen() {
                         </Text>
                       )}
                     </View>
-                    {claimed && (
-                      <View style={styles.claimedBadge}>
-                        <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                    {hasPendingClaim && (
+                      <View style={styles.pendingBadge}>
+                        <Ionicons name="time" size={16} color="#F59E0B" />
+                        <Text style={styles.pendingBadgeText}>Pending</Text>
                       </View>
                     )}
                   </View>
@@ -747,7 +365,7 @@ export default function ChildRewardsScreen() {
                         style={styles.claimButtonGradient}
                       >
                         <Text style={styles.claimButtonEmoji}>🎉</Text>
-                        <Text style={styles.claimButtonText}>Claim Now!</Text>
+                        <Text style={styles.claimButtonText}>Request Reward</Text>
                       </LinearGradient>
                     </PremiumCard>
                   )}
@@ -757,16 +375,80 @@ export default function ChildRewardsScreen() {
           )}
         </View>
 
-        {myClaims.length > 0 && (
+        {/* Pending Requests Section */}
+        {pendingClaims.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🎊 Claimed ({myClaims.length})</Text>
-            <View style={styles.claimedCard}>
-              <Text style={styles.claimedEmoji}>🎉</Text>
-              <Text style={styles.claimedText}>
-                Amazing! You've claimed {myClaims.length} reward{myClaims.length !== 1 ? 's' : ''}!
-              </Text>
-              <Text style={styles.claimedSubtext}>Keep earning points for more!</Text>
-            </View>
+            <Text style={styles.sectionTitle}>⏳ Pending Requests ({pendingClaims.length})</Text>
+            {pendingClaims.map((claim) => {
+              const reward = getRewardForClaim(claim);
+              if (!reward) return null;
+              return (
+                <View key={claim.id} style={styles.historyCard}>
+                  <View style={styles.historyIconContainer}>
+                    <Text style={styles.historyIcon}>{reward.emoji || '🎁'}</Text>
+                  </View>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTitle}>{reward.title}</Text>
+                    <Text style={styles.historyDate}>
+                      Requested {new Date(claim.claimed_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.pendingStatusBadge}>
+                    <Ionicons name="time" size={14} color="#F59E0B" />
+                    <Text style={styles.pendingStatusText}>Waiting</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* History Section */}
+        {(approvedClaims.length > 0 || rejectedClaims.length > 0) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📜 History</Text>
+            {approvedClaims.map((claim) => {
+              const reward = getRewardForClaim(claim);
+              if (!reward) return null;
+              return (
+                <View key={claim.id} style={styles.historyCard}>
+                  <View style={[styles.historyIconContainer, styles.approvedIconContainer]}>
+                    <Text style={styles.historyIcon}>{reward.emoji || '🎁'}</Text>
+                  </View>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTitle}>{reward.title}</Text>
+                    <Text style={styles.historyDate}>
+                      Approved {claim.approved_at ? new Date(claim.approved_at).toLocaleDateString() : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.approvedStatusBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                    <Text style={styles.approvedStatusText}>Received</Text>
+                  </View>
+                </View>
+              );
+            })}
+            {rejectedClaims.map((claim) => {
+              const reward = getRewardForClaim(claim);
+              if (!reward) return null;
+              return (
+                <View key={claim.id} style={styles.historyCard}>
+                  <View style={[styles.historyIconContainer, styles.rejectedIconContainer]}>
+                    <Text style={styles.historyIcon}>{reward.emoji || '🎁'}</Text>
+                  </View>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTitle}>{reward.title}</Text>
+                    <Text style={styles.historyDate}>
+                      Declined {claim.approved_at ? new Date(claim.approved_at).toLocaleDateString() : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.rejectedStatusBadge}>
+                    <Ionicons name="close-circle" size={14} color="#EF4444" />
+                    <Text style={styles.rejectedStatusText}>Declined</Text>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
         </View>
@@ -792,43 +474,18 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   
-  // Floating sparkles
-  floatingSparkle: {
-    position: 'absolute',
-    fontSize: 16,
-    zIndex: 10,
-  },
-  
-  // Flying emojis that cross the screen
-  flyingEmoji: {
-    position: 'absolute',
-    fontSize: 26,
-    zIndex: 10,
-    right: 0,
-  },
-  
-  // Sparkling gift sparkle
-  sparklingGift: {
-    position: 'absolute',
-    fontSize: 18,
-    top: -8,
-    right: -6,
-    zIndex: 15,
-  },
-  
-  // Gift icon with sparkle container
-  giftIconContainer: {
+  // Header icon (right side)
+  headerIconCircle: {
     position: 'relative',
-    marginRight: 10,
   },
   giftIcon: {
-    fontSize: 28,
+    fontSize: 44,
   },
-  
-  // Header left content grouping
-  headerLeftContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sparkle: {
+    position: 'absolute',
+    fontSize: 16,
+    top: -4,
+    right: -4,
   },
   
   // Premium Header
@@ -863,14 +520,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '600',
-  },
-  headerIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   
   contentContainer: {
@@ -1100,5 +749,113 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '500',
     marginTop: 8,
+  },
+  
+  // Pending badge on reward cards
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  pendingBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+  
+  // History cards
+  historyCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  historyIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  approvedIconContainer: {
+    backgroundColor: '#D1FAE5',
+  },
+  rejectedIconContainer: {
+    backgroundColor: '#FEE2E2',
+  },
+  historyIcon: {
+    fontSize: 24,
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A2E',
+    marginBottom: 4,
+  },
+  historyDate: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  
+  // Status badges for history
+  pendingStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 4,
+  },
+  pendingStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+  approvedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 4,
+  },
+  approvedStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  rejectedStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 4,
+  },
+  rejectedStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
   },
 });

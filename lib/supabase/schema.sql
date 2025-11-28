@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS public.families (
   name TEXT NOT NULL,
   family_code TEXT NOT NULL UNIQUE DEFAULT generate_family_code(),
   parent_id UUID NOT NULL,
+  parent_pin TEXT, -- 4-digit PIN for exiting child mode (stored hashed)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES users(id) ON DELETE CASCADE
@@ -165,15 +166,17 @@ CREATE TABLE IF NOT EXISTS public.rewards (
 GRANT SELECT ON public.rewards TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.rewards TO authenticated;
 
--- Reward claims table
+-- Reward claims table (with approval workflow)
 CREATE TABLE IF NOT EXISTS public.reward_claims (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   reward_id UUID NOT NULL,
   child_id UUID NOT NULL,
   claimed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  approved_by UUID REFERENCES users(id),
+  approved_at TIMESTAMP WITH TIME ZONE,
   CONSTRAINT fk_reward FOREIGN KEY (reward_id) REFERENCES rewards(id) ON DELETE CASCADE,
-  CONSTRAINT fk_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
-  CONSTRAINT unique_claim UNIQUE (reward_id, child_id)
+  CONSTRAINT fk_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
 );
 
 GRANT SELECT ON public.reward_claims TO anon;
@@ -587,6 +590,21 @@ CREATE POLICY "Children can claim rewards" ON public.reward_claims
     child_id IN (SELECT id FROM public.children WHERE user_id = auth.uid())
   );
 
+CREATE POLICY "Parents can update reward claims" ON public.reward_claims
+  FOR UPDATE USING (
+    child_id IN (
+      SELECT id FROM children 
+      WHERE family_id IN (
+        SELECT id FROM families WHERE parent_id = auth.uid()
+      )
+    )
+    OR
+    child_id IN (
+      SELECT id FROM children 
+      WHERE family_id = public.current_user_family_id()
+    )
+  );
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_family_id ON public.users(family_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
@@ -607,3 +625,4 @@ CREATE INDEX IF NOT EXISTS idx_chore_completions_completed_date ON public.chore_
 CREATE INDEX IF NOT EXISTS idx_rewards_family_id ON public.rewards(family_id);
 CREATE INDEX IF NOT EXISTS idx_reward_claims_reward_id ON public.reward_claims(reward_id);
 CREATE INDEX IF NOT EXISTS idx_reward_claims_child_id ON public.reward_claims(child_id);
+CREATE INDEX IF NOT EXISTS idx_reward_claims_status ON public.reward_claims(status);

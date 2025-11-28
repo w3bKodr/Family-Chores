@@ -12,8 +12,10 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
+import { useAuthStore } from '@lib/store/authStore';
 import { Button } from '@components/Button';
 import { Input } from '@components/Input';
 import { Card } from '@components/Card';
@@ -71,7 +73,8 @@ const PremiumCard = ({
 
 export default function ParentRewardsScreen() {
   const router = useRouter();
-  const { family, rewards, children, getRewards, createReward, updateReward, deleteReward, loading } = useFamilyStore();
+  const { family, rewards, children, rewardClaims, getRewards, getRewardClaims, createReward, updateReward, deleteReward, approveRewardClaim, rejectRewardClaim, loading } = useFamilyStore();
+  const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [title, setTitle] = useState('');
   const [pointsRequired, setPointsRequired] = useState('50');
@@ -85,6 +88,7 @@ export default function ParentRewardsScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [rewardToDelete, setRewardToDelete] = useState<string | null>(null);
   const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'rewards' | 'requests' | 'history'>('rewards');
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -100,7 +104,10 @@ export default function ParentRewardsScreen() {
   const loadData = async () => {
     if (!family?.id) return;
     try {
-      await getRewards(family.id);
+      await Promise.all([
+        getRewards(family.id),
+        getRewardClaims(family.id),
+      ]);
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
     }
@@ -190,6 +197,38 @@ export default function ParentRewardsScreen() {
     }
   };
 
+  // Filter claims by status
+  const pendingClaims = rewardClaims.filter(c => c.status === 'pending');
+  const approvedClaims = rewardClaims.filter(c => c.status === 'approved');
+  const rejectedClaims = rewardClaims.filter(c => c.status === 'rejected');
+  const historyClaims = [...approvedClaims, ...rejectedClaims].sort(
+    (a, b) => new Date(b.approved_at || b.claimed_at).getTime() - new Date(a.approved_at || a.claimed_at).getTime()
+  );
+
+  // Helper to get reward and child info for a claim
+  const getRewardForClaim = (claim: typeof rewardClaims[0]) => rewards.find(r => r.id === claim.reward_id);
+  const getChildForClaim = (claim: typeof rewardClaims[0]) => children.find(c => c.id === claim.child_id);
+
+  const handleApproveClaim = async (claimId: string) => {
+    if (!user?.id) return;
+    try {
+      await approveRewardClaim(claimId, user.id);
+      showAlert('Approved!', 'The reward has been given to the child.', 'success');
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+    }
+  };
+
+  const handleRejectClaim = async (claimId: string) => {
+    if (!user?.id) return;
+    try {
+      await rejectRewardClaim(claimId, user.id);
+      showAlert('Declined', 'The reward request has been declined.', 'info');
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Premium Header */}
@@ -200,6 +239,33 @@ export default function ParentRewardsScreen() {
             <Text style={styles.headerSubtitle}>Manage family rewards</Text>
           </View>
         </View>
+        
+        {/* Tab Bar */}
+        <View style={styles.tabBar}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'rewards' && styles.tabActive]}
+            onPress={() => setActiveTab('rewards')}
+          >
+            <Ionicons name="gift" size={18} color={activeTab === 'rewards' ? '#8B5CF6' : '#9CA3AF'} />
+            <Text style={[styles.tabText, activeTab === 'rewards' && styles.tabTextActive]}>Rewards</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'requests' && styles.tabActive]}
+            onPress={() => setActiveTab('requests')}
+          >
+            <Ionicons name="time" size={18} color={activeTab === 'requests' ? '#8B5CF6' : '#9CA3AF'} />
+            <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
+              Requests {pendingClaims.length > 0 && `(${pendingClaims.length})`}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'history' && styles.tabActive]}
+            onPress={() => setActiveTab('history')}
+          >
+            <Ionicons name="receipt" size={18} color={activeTab === 'history' ? '#8B5CF6' : '#9CA3AF'} />
+            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>History</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -208,6 +274,9 @@ export default function ParentRewardsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {/* REWARDS TAB */}
+        {activeTab === 'rewards' && (
+          <>
         {showForm && (
           <View style={styles.formCard}>
             <View style={styles.formSection}>
@@ -314,6 +383,95 @@ export default function ParentRewardsScreen() {
             ))
           )}
         </View>
+          </>
+        )}
+
+        {/* REQUESTS TAB */}
+        {activeTab === 'requests' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pending Requests</Text>
+            {pendingClaims.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No pending reward requests</Text>
+              </View>
+            ) : (
+              pendingClaims.map((claim) => {
+                const reward = rewards.find(r => r.id === claim.reward_id);
+                const child = children.find(c => c.id === claim.child_id);
+                return (
+                  <View key={claim.id} style={styles.requestCard}>
+                    <View style={styles.requestHeader}>
+                      <View style={styles.rewardIconContainer}>
+                        <Text style={styles.rewardIcon}>{reward?.emoji || '🏆'}</Text>
+                      </View>
+                      <View style={styles.requestInfo}>
+                        <Text style={styles.requestRewardTitle}>{reward?.title || 'Unknown Reward'}</Text>
+                        <Text style={styles.requestChildName}>{child?.display_name || 'Unknown Child'}</Text>
+                      </View>
+                      <View style={styles.requestPoints}>
+                        <Text style={styles.requestPointsValue}>{reward?.points_required || 0}</Text>
+                        <Text style={styles.requestPointsLabel}>points</Text>
+                      </View>
+                    </View>
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity 
+                        style={styles.approveButton}
+                        onPress={() => handleApproveClaim(claim.id)}
+                      >
+                        <Text style={styles.approveButtonText}>✓ Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.rejectButton}
+                        onPress={() => handleRejectClaim(claim.id)}
+                      >
+                        <Text style={styles.rejectButtonText}>✕ Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        {/* HISTORY TAB */}
+        {activeTab === 'history' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Reward History</Text>
+            {historyClaims.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No reward history yet</Text>
+              </View>
+            ) : (
+              historyClaims.map((claim) => {
+                const reward = rewards.find(r => r.id === claim.reward_id);
+                const child = children.find(c => c.id === claim.child_id);
+                const isApproved = claim.status === 'approved';
+                return (
+                  <View key={claim.id} style={styles.historyCard}>
+                    <View style={styles.historyHeader}>
+                      <View style={[styles.historyIconContainer, isApproved ? styles.historyApproved : styles.historyRejected]}>
+                        <Text style={styles.historyIcon}>{isApproved ? '✓' : '✕'}</Text>
+                      </View>
+                      <View style={styles.historyInfo}>
+                        <Text style={styles.historyRewardTitle}>{reward?.title || 'Unknown Reward'}</Text>
+                        <Text style={styles.historyChildName}>{child?.display_name || 'Unknown Child'}</Text>
+                      </View>
+                      <View style={styles.historyMeta}>
+                        <Text style={[styles.historyStatus, isApproved ? styles.historyStatusApproved : styles.historyStatusRejected]}>
+                          {isApproved ? 'Approved' : 'Rejected'}
+                        </Text>
+                        <Text style={styles.historyDate}>
+                          {claim.approved_at ? new Date(claim.approved_at).toLocaleDateString() : new Date(claim.claimed_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
       </ScrollView>
 
       <AlertModal
@@ -559,5 +717,187 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8B5CF6',
     fontWeight: '600',
+  },
+  pendingCountBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  pendingCountText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 16,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  tabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  tabTextActive: {
+    color: '#8B5CF6',
+  },
+  requestCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    marginBottom: 14,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+    padding: 18,
+  },
+  requestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  requestInfo: {
+    flex: 1,
+  },
+  requestRewardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 4,
+  },
+  requestChildName: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  requestPoints: {
+    alignItems: 'flex-end',
+  },
+  requestPointsValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#8B5CF6',
+  },
+  requestPointsLabel: {
+    fontSize: 12,
+    color: '#8F92A1',
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    color: '#EF4444',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  historyCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 24,
+    marginBottom: 14,
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+    padding: 18,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  historyIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  historyApproved: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  historyRejected: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  historyIcon: {
+    fontSize: 24,
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyRewardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 2,
+  },
+  historyChildName: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  historyMeta: {
+    alignItems: 'flex-end',
+  },
+  historyStatus: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  historyStatusApproved: {
+    color: '#10B981',
+  },
+  historyStatusRejected: {
+    color: '#EF4444',
+  },
+  historyDate: {
+    fontSize: 12,
+    color: '#8F92A1',
   },
 });
