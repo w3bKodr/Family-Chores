@@ -350,9 +350,25 @@ export default function ChildDashboard() {
   };
 
   const handlePinSubmit = async (pin: string) => {
-    if (!family?.id) return;
-    
-    const isValid = await verifyParentPin(family.id, pin);
+    // Ensure we have a family id (family may not be loaded yet). Try to fall back to the
+    // authenticated user's family_id and fetch family if needed. Avoid silent no-op.
+    const familyId = family?.id ?? user?.family_id;
+    if (!familyId) {
+      showAlert('Error', 'Family data not available. Please try again.', 'error');
+      return;
+    }
+
+    // If the family object itself is not loaded in state, attempt to fetch it so
+    // subsequent flows that rely on family are populated.
+    if (!family?.id && user?.family_id) {
+      try {
+        await getFamily(user.family_id);
+      } catch (err) {
+        // proceed — verification below will still run against familyId
+      }
+    }
+
+    const isValid = await verifyParentPin(familyId, pin);
     if (isValid) {
       setShowPinModal(false);
       // Delay navigation to allow modal to close first

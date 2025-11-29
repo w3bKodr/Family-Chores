@@ -75,11 +75,11 @@ const PremiumCard = ({
 
 // Sparkle particle effect component for child cards
 const SparkleEffect = () => {
-  const sparkleAnims = [
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-    useRef(new Animated.Value(0)).current,
-  ];
+  const sparkleAnims = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
   const isMounted = useRef(true);
   
   useEffect(() => {

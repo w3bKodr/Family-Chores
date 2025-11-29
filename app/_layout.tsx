@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { SafeAreaView, Text } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@lib/store/authStore';
@@ -11,6 +12,9 @@ export default function RootLayout() {
   const { checkSession, user, session } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
+  // Mounted state used to delay mounting the full navigation stack briefly
+  // Keep hooks at top level so hooks order is stable between renders
+  const [delayedMount, setDelayedMount] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -48,7 +52,26 @@ export default function RootLayout() {
     }
   }, [session, user, segments, isReady]);
 
+  // Delay mounting the full navigation stack briefly to isolate startup crashes
+  // Must be declared unconditionally (above any early returns) so hook order
+  // remains stable between renders.
+  useEffect(() => {
+    const t = setTimeout(() => setDelayedMount(true), 800);
+    return () => clearTimeout(t);
+  }, []);
+
   if (!isReady) return null;
+
+  if (!delayedMount) {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <SafeAreaView style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text>Starting app…</Text>
+        </SafeAreaView>
+      </>
+    );
+  }
 
   return (
     <>

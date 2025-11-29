@@ -212,8 +212,17 @@ export default function ModernBottomTabBar({
     return hrefs[routeName] || `/(app)/${routeName}`;
   };
   const handleTabPress = (route: any) => {
-    const href = getHref(route.name);
-    router.replace(href as any);
+    // Use the tab navigator's native navigation for smoother switching
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+
+    if (!event.defaultPrevented) {
+      // Navigate to the tab using the built-in navigation
+      navigation.navigate(route.name);
+    }
   };
   
   return (

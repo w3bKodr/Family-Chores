@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "wkodr",
     "name": "Family Chores",
     "slug": "family-chores",
     "version": "1.0.0",
@@ -15,15 +16,17 @@
       "**/*"
     ],
     "ios": {
-      "supportsTabletMode": true,
       "bundleIdentifier": "com.familychores.app",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Allow Family Chores to access your local network for syncing",
         "NSBonjourServiceTypes": [
           "_http._tcp",
+          "_ws._tcp",
+          "_http._tcp",
           "_ws._tcp"
         ],
-        "NSUserTrackingUsageDescription": "Allow Family Chores to track your activity for analytics"
+        "NSUserTrackingUsageDescription": "Allow Family Chores to track your activity for analytics",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -56,10 +59,12 @@
     },
     "extra": {
       "router": {
-        "origin": false
+        "origin": "familychores://"
       },
+      "EXPO_PUBLIC_SUPABASE_URL": "https://ypsgeynsstqzujspebra.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_fCvClMZfbZzDkwMvK4kYpA_NCBxeu9Q",
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
+        "projectId": "c6ae1b24-a0ec-4e34-9a18-8222d38426cc"
       }
     }
   }

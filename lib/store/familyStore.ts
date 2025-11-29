@@ -400,28 +400,63 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
       if (updateError) throw updateError;
 
-      // Update child's points
-      const { choreCompletions } = get();
-      const completion = choreCompletions.find(c => c.id === completionId);
-      if (completion) {
-        const chore = get().chores.find(c => c.id === completion.chore_id);
-        if (chore) {
-          const { data: child } = await supabase
+      // Update child's points.
+      // Fetch the updated completion from the database (don't rely solely on local state)
+      const { data: updatedCompletion, error: fetchCompError } = await supabase
+        .from('chore_completions')
+        .select('id, chore_id, completed_by')
+        .eq('id', completionId)
+        .single();
+
+      if (fetchCompError) {
+        // If we can't fetch the completion, continue — the completion status was updated above
+        console.warn('Could not fetch updated completion after approve:', fetchCompError);
+      } else if (updatedCompletion) {
+        // Determine chore points (try local cache first, otherwise fetch)
+        let chorePoints: number | undefined = undefined;
+        const localChore = get().chores.find((c) => c.id === updatedCompletion.chore_id);
+        if (localChore) {
+          chorePoints = (localChore as any).points;
+        } else {
+          const { data: choreData, error: choreFetchError } = await supabase
+            .from('chores')
+            .select('points')
+            .eq('id', updatedCompletion.chore_id)
+            .single();
+          if (!choreFetchError && choreData) {
+            chorePoints = (choreData as any).points;
+          }
+        }
+
+        if (typeof chorePoints === 'number') {
+          const { data: childData, error: childFetchError } = await supabase
             .from('children')
             .select('points')
-            .eq('id', completion.completed_by)
+            .eq('id', updatedCompletion.completed_by)
             .single();
 
-          if (child) {
-            await supabase
+          if (!childFetchError && childData) {
+            const newPoints = (childData as any).points + chorePoints;
+            const { error: childUpdateError } = await supabase
               .from('children')
-              .update({ points: child.points + chore.points })
-              .eq('id', completion.completed_by);
+              .update({ points: newPoints })
+              .eq('id', updatedCompletion.completed_by);
+
+            if (childUpdateError) {
+              console.warn('Failed to update child points after approve:', childUpdateError);
+            } else {
+              // Update local children cache so UI updates immediately
+              const { children } = get();
+              if (children && children.length > 0) {
+                set({ children: children.map(c => c.id === updatedCompletion.completed_by ? { ...c, points: newPoints } : c) });
+              }
+            }
           }
         }
       }
 
-      const updated = choreCompletions.map(c => c.id === completionId ? { ...c, status: 'approved' as const } : c);
+      const { choreCompletions } = get();
+      const updated = (choreCompletions || []).map((c: any) => c.id === completionId ? { ...c, status: 'approved' as const } : c);
       set({ choreCompletions: updated });
     } catch (error: any) {
       set({ error: error.message });

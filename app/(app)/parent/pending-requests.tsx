@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, SafeAreaView, ScrollView, StyleSheet, RefreshControl, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, SafeAreaView, ScrollView, StyleSheet, RefreshControl, Pressable, Animated, Easing, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { useAuthStore } from '@lib/store/authStore';
-import { Button } from '@components/Button';
 import { AlertModal } from '@components/AlertModal';
 
 // Premium Card with press animation
@@ -13,7 +13,7 @@ const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; 
 
   const handlePressIn = () => {
     Animated.timing(scaleAnim, {
-      toValue: 0.96,
+      toValue: 0.97,
       duration: 100,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
@@ -125,7 +125,6 @@ export default function PendingRequestsScreen() {
   const handleApproveParent = async (id: string) => {
     try {
       await approveParentJoinRequest(id);
-      // Refresh parent requests and parents list so UI updates immediately
       if (family?.id) {
         await getParentJoinRequests(family.id);
         await getParents(family.id);
@@ -165,99 +164,154 @@ export default function PendingRequestsScreen() {
 
   // Filter pending reward claims
   const pendingRewardClaims = rewardClaims.filter(c => c.status === 'pending');
-
-  if (!user?.family_id) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.emptyContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-          <View style={styles.emptyHeader}>
-            <View style={styles.iconCircle}>
-              <LinearGradient
-                colors={['#FF6B35', '#FF8F5A']}
-                style={styles.iconGradient}
-              >
-                <Text style={styles.iconEmoji}>📋</Text>
-              </LinearGradient>
-            </View>
-            <Text style={styles.title}>Pending Requests</Text>
-            <Text style={styles.subtitle}>You don't have a family yet or there are no pending requests.</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+  const totalRequests = parentJoinRequests.length + joinRequests.length + pendingRewardClaims.length;
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}>
-        <View style={styles.pageHeader}>
-          <View style={styles.iconCircle}>
-            <LinearGradient
-              colors={['#FF6B35', '#FF8F5A']}
-              style={styles.iconGradient}
-            >
-              <Text style={styles.iconEmoji}>📋</Text>
-            </LinearGradient>
+      {/* Premium Header matching Dashboard */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => router.replace('/(app)/parent-dashboard')}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Pending Requests</Text>
+            <Text style={styles.headerSubtitle}>
+              {totalRequests === 0 ? 'All caught up!' : `${totalRequests} pending approval`}
+            </Text>
           </View>
-          <Text style={styles.pageTitle}>Pending Requests</Text>
+          <Text style={styles.headerEmoji}>📋</Text>
         </View>
+      </View>
 
+      <ScrollView 
+        contentContainerStyle={styles.content} 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF6B35" />}
+      >
+        {/* Parent Join Requests */}
         {parentJoinRequests.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Family Join Requests — Parent</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Ionicons name="people" size={18} color="#EA580C" />
+              </View>
+              <Text style={styles.sectionTitle}>Parent Requests</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{parentJoinRequests.length}</Text>
+              </View>
+            </View>
             {parentJoinRequests.map((r: any) => (
               <PremiumCard key={r.id} style={styles.requestCard}>
-                <View style={styles.requestInfo}>
-                  <Text style={styles.requestName}>{r.display_name || r.users?.display_name || 'Unknown'}</Text>
-                  <Text style={styles.requestMeta}>{r.user_email || r.users?.email || 'No email'}</Text>
+                <View style={styles.requestMain}>
+                  <View style={styles.avatarContainer}>
+                    <LinearGradient
+                      colors={['#FF6B35', '#FF8F5A']}
+                      style={styles.avatarGradient}
+                    >
+                      <Text style={styles.avatarText}>
+                        {(r.display_name || r.users?.display_name || 'U')[0].toUpperCase()}
+                      </Text>
+                    </LinearGradient>
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.requestName}>{r.display_name || r.users?.display_name || 'Unknown'}</Text>
+                    <Text style={styles.requestMeta}>{r.user_email || r.users?.email || 'No email'}</Text>
+                  </View>
                 </View>
                 <View style={styles.requestActions}>
-                  <Pressable onPress={() => handleApproveParent(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
-                  <Pressable onPress={() => handleRejectParent(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
+                  <TouchableOpacity onPress={() => handleApproveParent(r.id)} style={styles.approveButton}>
+                    <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleRejectParent(r.id)} style={styles.rejectButton}>
+                    <Ionicons name="close" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
               </PremiumCard>
             ))}
           </View>
         )}
 
+        {/* Child Join Requests */}
         {joinRequests.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Child Requests</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Ionicons name="person-add" size={18} color="#10B981" />
+              </View>
+              <Text style={styles.sectionTitle}>Child Requests</Text>
+              <View style={[styles.countBadge, { backgroundColor: '#D1FAE5' }]}>
+                <Text style={[styles.countBadgeText, { color: '#10B981' }]}>{joinRequests.length}</Text>
+              </View>
+            </View>
             {joinRequests.map((r: any) => (
               <PremiumCard key={r.id} style={styles.requestCard}>
-                <View style={styles.requestInfo}>
-                  <Text style={styles.requestName}>{r.user_email || r.users?.display_name || r.user_id}</Text>
-                  <Text style={styles.requestMeta}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</Text>
+                <View style={styles.requestMain}>
+                  <View style={styles.avatarContainer}>
+                    <LinearGradient
+                      colors={['#10B981', '#34D399']}
+                      style={styles.avatarGradient}
+                    >
+                      <Ionicons name="person" size={20} color="#FFFFFF" />
+                    </LinearGradient>
+                  </View>
+                  <View style={styles.requestInfo}>
+                    <Text style={styles.requestName}>{r.user_email || r.users?.display_name || 'Unknown'}</Text>
+                    <Text style={styles.requestMeta}>
+                      {r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently'}
+                    </Text>
+                  </View>
                 </View>
                 <View style={styles.requestActions}>
-                  <Pressable onPress={() => handleApproveChild(r.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
-                  <Pressable onPress={() => handleRejectChild(r.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
+                  <TouchableOpacity onPress={() => handleApproveChild(r.id)} style={styles.approveButton}>
+                    <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleRejectChild(r.id)} style={styles.rejectButton}>
+                    <Ionicons name="close" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
                 </View>
               </PremiumCard>
             ))}
           </View>
         )}
 
+        {/* Reward Claims */}
         {pendingRewardClaims.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🎁 Reward Requests</Text>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Ionicons name="gift" size={18} color="#F59E0B" />
+              </View>
+              <Text style={styles.sectionTitle}>Reward Requests</Text>
+              <View style={[styles.countBadge, { backgroundColor: '#FEF3C7' }]}>
+                <Text style={[styles.countBadgeText, { color: '#F59E0B' }]}>{pendingRewardClaims.length}</Text>
+              </View>
+            </View>
             {pendingRewardClaims.map((claim: any) => {
               const reward = rewards.find(r => r.id === claim.reward_id);
               const child = children.find(c => c.id === claim.child_id);
               return (
                 <PremiumCard key={claim.id} style={styles.requestCard}>
-                  <View style={styles.rewardClaimInfo}>
-                    <View style={styles.rewardClaimHeader}>
+                  <View style={styles.requestMain}>
+                    <View style={styles.rewardEmojiContainer}>
                       <Text style={styles.rewardEmoji}>{reward?.emoji || '🎁'}</Text>
-                      <View style={styles.rewardClaimDetails}>
-                        <Text style={styles.requestName}>{reward?.title || 'Unknown Reward'}</Text>
-                        <Text style={styles.requestMeta}>{child?.display_name || 'Unknown'} • {reward?.points_required || 0} pts</Text>
-                      </View>
+                    </View>
+                    <View style={styles.requestInfo}>
+                      <Text style={styles.requestName}>{reward?.title || 'Unknown Reward'}</Text>
+                      <Text style={styles.requestMeta}>
+                        {child?.display_name || 'Unknown'} • {reward?.points_required || 0} pts
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.requestActions}>
-                    <Pressable onPress={() => handleApproveRewardClaim(claim.id)} style={styles.approveButton}><Text style={styles.approveText}>✓</Text></Pressable>
-                    <Pressable onPress={() => handleRejectRewardClaim(claim.id)} style={styles.rejectButton}><Text style={styles.rejectText}>✗</Text></Pressable>
+                    <TouchableOpacity onPress={() => handleApproveRewardClaim(claim.id)} style={styles.approveButton}>
+                      <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleRejectRewardClaim(claim.id)} style={styles.rejectButton}>
+                      <Ionicons name="close" size={20} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </View>
                 </PremiumCard>
               );
@@ -265,17 +319,36 @@ export default function PendingRequestsScreen() {
           </View>
         )}
 
-        {parentJoinRequests.length === 0 && joinRequests.length === 0 && pendingRewardClaims.length === 0 && (
+        {/* Empty State */}
+        {totalRequests === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>✨</Text>
+            <View style={styles.emptyIconContainer}>
+              <LinearGradient
+                colors={['#FF6B35', '#FF8F5A']}
+                style={styles.emptyIconGradient}
+              >
+                <Ionicons name="checkmark-done" size={48} color="#FFFFFF" />
+              </LinearGradient>
+            </View>
             <Text style={styles.emptyTitle}>All caught up!</Text>
             <Text style={styles.emptySubtitle}>No pending requests at the moment.</Text>
+            <TouchableOpacity 
+              style={styles.backToDashboardButton}
+              onPress={() => router.replace('/(app)/parent-dashboard')}
+            >
+              <Text style={styles.backToDashboardText}>Back to Dashboard</Text>
+            </TouchableOpacity>
           </View>
         )}
-
       </ScrollView>
 
-      <AlertModal visible={alertVisible} title={alertTitle} message={alertMessage} type={alertType} onClose={() => setAlertVisible(false)} />
+      <AlertModal 
+        visible={alertVisible} 
+        title={alertTitle} 
+        message={alertMessage} 
+        type={alertType} 
+        onClose={() => setAlertVisible(false)} 
+      />
     </SafeAreaView>
   );
 }
@@ -285,82 +358,101 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: '#FBF8F3',
   },
-  content: { 
-    padding: 20, 
-    paddingBottom: 120,
-  },
-  emptyContent: { 
-    padding: 24,
-    flexGrow: 1,
-  },
-  emptyHeader: {
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  pageHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 16,
+  premiumHeader: {
+    backgroundColor: '#FF6B35',
+    paddingLeft: 20,
+    paddingRight: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     shadowColor: '#FF6B35',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  iconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  iconEmoji: {
+  headerContent: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  headerEmoji: {
     fontSize: 36,
   },
-  pageTitle: { 
-    fontSize: 28, 
-    fontWeight: '800', 
-    color: '#1A1A2E',
-    letterSpacing: -0.5,
-  },
-  title: { 
-    fontSize: 28, 
-    fontWeight: '800', 
-    marginBottom: 8,
-    color: '#1A1A2E',
-    letterSpacing: -0.5,
-  },
-  subtitle: { 
-    color: '#8F92A1',
-    fontSize: 15,
-    textAlign: 'center',
-    fontWeight: '500',
+  content: { 
+    padding: 20, 
+    paddingBottom: 40,
   },
   section: { 
     marginBottom: 24,
   },
-  sectionTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
+  },
+  sectionIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sectionTitle: { 
+    flex: 1,
+    fontSize: 17, 
+    fontWeight: '700', 
     color: '#1A1A2E',
     letterSpacing: -0.3,
   },
+  countBadge: {
+    backgroundColor: '#FFEDD5',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  countBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
   premiumCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.04)',
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
-    shadowRadius: 24,
+    shadowRadius: 12,
     elevation: 4,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   requestCard: { 
     padding: 16, 
@@ -369,7 +461,41 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', 
     marginBottom: 12,
   },
-  requestInfo: {},
+  requestMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  avatarContainer: {
+    marginRight: 12,
+  },
+  avatarGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  rewardEmojiContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rewardEmoji: {
+    fontSize: 24,
+  },
+  requestInfo: {
+    flex: 1,
+  },
   requestName: { 
     fontSize: 16, 
     fontWeight: '700',
@@ -383,12 +509,12 @@ const styles = StyleSheet.create({
   },
   requestActions: { 
     flexDirection: 'row', 
-    gap: 10,
+    gap: 8,
   },
   approveButton: { 
     width: 40, 
     height: 40, 
-    borderRadius: 20, 
+    borderRadius: 14, 
     backgroundColor: '#10B981', 
     alignItems: 'center', 
     justifyContent: 'center',
@@ -398,15 +524,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  approveText: { 
-    color: '#FFFFFF', 
-    fontWeight: '700',
-    fontSize: 18,
-  },
   rejectButton: { 
     width: 40, 
     height: 40, 
-    borderRadius: 20, 
+    borderRadius: 14, 
     backgroundColor: '#EF4444', 
     alignItems: 'center', 
     justifyContent: 'center',
@@ -416,21 +537,27 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  rejectText: { 
-    color: '#FFFFFF', 
-    fontWeight: '700',
-    fontSize: 18,
-  },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 48,
+    paddingVertical: 60,
   },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: 16,
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 96,
+    height: 96,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1A1A2E',
     marginBottom: 8,
@@ -440,19 +567,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#8F92A1',
     fontWeight: '500',
+    marginBottom: 24,
   },
-  rewardClaimInfo: {
-    flex: 1,
+  backToDashboardButton: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  rewardClaimHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rewardEmoji: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  rewardClaimDetails: {
-    flex: 1,
+  backToDashboardText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

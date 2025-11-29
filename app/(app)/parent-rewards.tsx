@@ -246,23 +246,26 @@ export default function ParentRewardsScreen() {
             style={[styles.tab, activeTab === 'rewards' && styles.tabActive]}
             onPress={() => setActiveTab('rewards')}
           >
-            <Ionicons name="gift" size={18} color={activeTab === 'rewards' ? '#8B5CF6' : '#9CA3AF'} />
+            <Ionicons name="gift" size={16} color={activeTab === 'rewards' ? '#8B5CF6' : 'rgba(255,255,255,0.7)'} />
             <Text style={[styles.tabText, activeTab === 'rewards' && styles.tabTextActive]}>Rewards</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'requests' && styles.tabActive]}
             onPress={() => setActiveTab('requests')}
           >
-            <Ionicons name="time" size={18} color={activeTab === 'requests' ? '#8B5CF6' : '#9CA3AF'} />
-            <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
-              Requests {pendingClaims.length > 0 && `(${pendingClaims.length})`}
-            </Text>
+            <Ionicons name="time" size={16} color={activeTab === 'requests' ? '#8B5CF6' : 'rgba(255,255,255,0.7)'} />
+            <Text style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>Requests</Text>
+            {pendingClaims.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{pendingClaims.length}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'history' && styles.tabActive]}
             onPress={() => setActiveTab('history')}
           >
-            <Ionicons name="receipt" size={18} color={activeTab === 'history' ? '#8B5CF6' : '#9CA3AF'} />
+            <Ionicons name="receipt" size={16} color={activeTab === 'history' ? '#8B5CF6' : 'rgba(255,255,255,0.7)'} />
             <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>History</Text>
           </TouchableOpacity>
         </View>
@@ -732,21 +735,23 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginTop: 16,
     marginBottom: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 16,
-    padding: 4,
+    padding: 3,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     borderRadius: 12,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 6,
+    gap: 3,
+    flexWrap: 'nowrap',
   },
   tabActive: {
     backgroundColor: '#FFFFFF',
@@ -757,12 +762,26 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabText: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.7)',
   },
   tabTextActive: {
     color: '#8B5CF6',
+  },
+  tabBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  tabBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   requestCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',

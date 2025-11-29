@@ -180,9 +180,23 @@ export default function ChildProfileScreen() {
   };
 
   const handlePinSubmit = async (pin: string) => {
-    if (!family?.id) return;
-    
-    const isValid = await verifyParentPin(family.id, pin);
+    // Ensure we have a family id (family may not be loaded yet). Try fallback to
+    // the authenticated user's family_id and fetch family if needed.
+    const familyId = family?.id ?? user?.family_id;
+    if (!familyId) {
+      showAlert('Error', 'Family data not available. Please try again.', 'error');
+      return;
+    }
+
+    if (!family?.id && user?.family_id) {
+      try {
+        await getFamily(user.family_id);
+      } catch (err) {
+        // ignore — verification will still run against familyId
+      }
+    }
+
+    const isValid = await verifyParentPin(familyId, pin);
     if (isValid) {
       setShowPinModal(false);
       // Delay navigation to allow modal to close first
