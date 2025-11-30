@@ -82,6 +82,10 @@ export default function ChildProfileScreen() {
   const [currentEmoji, setCurrentEmoji] = useState('👶');
   const [showPinModal, setShowPinModal] = useState(false);
   const [hasPinSet, setHasPinSet] = useState(false);
+  
+  // Track if data has been loaded to prevent infinite loops
+  const dataLoadedRef = useRef(false);
+  const familyIdRef = useRef<string | null>(null);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -94,20 +98,24 @@ export default function ChildProfileScreen() {
     loadActiveChild();
   }, []);
 
-  // Fetch family data if not already loaded
+  // Fetch family data if not already loaded - only trigger on family_id change
   useEffect(() => {
     if (user?.family_id && !family) {
       getFamily(user.family_id);
     }
-  }, [user, family]);
+  }, [user?.family_id]);
 
-  // Fetch children when family is available and check PIN status
+  // Fetch children when family is available and check PIN status - only on family ID change
   useEffect(() => {
-    if (family?.id) {
-      getChildren(family.id);
+    if (family?.id && family.id !== familyIdRef.current) {
+      familyIdRef.current = family.id;
+      if (!dataLoadedRef.current) {
+        dataLoadedRef.current = true;
+        getChildren(family.id);
+      }
       checkPinStatus();
     }
-  }, [family]);
+  }, [family?.id]);
 
   const checkPinStatus = async () => {
     if (family?.id) {
@@ -121,7 +129,7 @@ export default function ChildProfileScreen() {
     if (children.length > 0) {
       if (activeChildId) {
         const activeChild = children.find((c) => c.id === activeChildId);
-        if (activeChild) {
+        if (activeChild && activeChild.id !== child?.id) {
           setChild(activeChild);
           setCurrentEmoji(activeChild.emoji || '👶');
           return;
@@ -130,13 +138,13 @@ export default function ChildProfileScreen() {
       // Fallback: try to find by user_id
       if (user?.id) {
         const userChild = children.find((c) => c.user_id === user.id);
-        if (userChild) {
+        if (userChild && userChild.id !== child?.id) {
           setChild(userChild);
           setCurrentEmoji(userChild.emoji || '👶');
         }
       }
     }
-  }, [activeChildId, children, user]);
+  }, [activeChildId, children, user?.id]);
 
   const loadActiveChild = async () => {
     const childId = await AsyncStorage.getItem('active_child_id');

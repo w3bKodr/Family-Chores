@@ -11,6 +11,7 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -158,7 +159,7 @@ export default function CreateChore() {
       }
 
       setTimeout(() => {
-        router.back();
+        router.replace('/(app)/parent-chores');
       }, 1500);
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
@@ -168,6 +169,15 @@ export default function CreateChore() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Back Button */}
+        <TouchableOpacity 
+          onPress={() => router.replace('/(app)/parent-chores')}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color="#374151" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+
         <View style={styles.header}>
           <LinearGradient
             colors={['#FF6B35', '#F7931E']}
@@ -295,7 +305,7 @@ export default function CreateChore() {
         </PremiumCard>
 
         <TouchableOpacity 
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(app)/parent-chores')}
           style={styles.backLink}
         >
           <Text style={styles.backLinkText}>Cancel</Text>
@@ -327,8 +337,21 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 24,
+    paddingTop: 12,
     paddingBottom: 120,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 8,
+    alignSelf: 'flex-start',
+  },
+  backButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#374151',
+    marginLeft: 6,
   },
   header: {
     alignItems: 'center',

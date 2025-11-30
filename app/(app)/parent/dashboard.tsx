@@ -532,7 +532,7 @@ export default function ParentDashboard() {
                           onPress={() =>
                             router.push({
                               pathname: '/(app)/parent/child-detail',
-                              params: { childId: child.id },
+                              params: { childId: child.id, from: 'dashboard' },
                             })
                           }
                           accentColor="rgba(219, 234, 254, 0.5)"

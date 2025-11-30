@@ -81,13 +81,16 @@ const SparkleEffect = () => {
     new Animated.Value(0),
   ]).current;
   const isMounted = useRef(true);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     isMounted.current = true;
+    let loopCount = 0;
+    const maxLoops = 3; // Run for about 2.5 seconds (3 loops * ~800ms)
     
     const createSparkleLoop = (anim: Animated.Value, delay: number) => {
       const loop = () => {
-        if (!isMounted.current) return;
+        if (!isMounted.current || loopCount >= maxLoops) return;
         Animated.sequence([
           Animated.delay(delay),
           Animated.parallel([
@@ -106,7 +109,8 @@ const SparkleEffect = () => {
             }),
           ]),
         ]).start(() => {
-          if (isMounted.current) loop();
+          loopCount++;
+          if (isMounted.current && loopCount < maxLoops) loop();
         });
       };
       loop();
@@ -116,8 +120,14 @@ const SparkleEffect = () => {
     createSparkleLoop(sparkleAnims[1], 300);
     createSparkleLoop(sparkleAnims[2], 600);
     
+    // Stop all animations after 2.5 seconds
+    timeoutRef.current = setTimeout(() => {
+      sparkleAnims.forEach(anim => anim.stopAnimation());
+    }, 2500);
+    
     return () => {
       isMounted.current = false;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       sparkleAnims.forEach(anim => anim.stopAnimation());
     };
   }, []);
@@ -151,6 +161,7 @@ const SparkleEffect = () => {
 const GoldenStars = ({ points }: { points: number }) => {
   const waveAnim = useRef(new Animated.Value(0)).current;
   const animationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     animationRef.current = Animated.loop(
@@ -163,9 +174,21 @@ const GoldenStars = ({ points }: { points: number }) => {
     );
     animationRef.current.start();
     
+    // Stop animation after 2.5 seconds
+    timeoutRef.current = setTimeout(() => {
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+      waveAnim.stopAnimation();
+      waveAnim.setValue(0);
+    }, 2500);
+    
     return () => {
       if (animationRef.current) {
         animationRef.current.stop();
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
       }
       waveAnim.stopAnimation();
     };
@@ -523,7 +546,7 @@ export default function ParentDashboard() {
                           onPress={() =>
                             router.push({
                               pathname: '/(app)/parent/child-detail',
-                              params: { childId: child.id },
+                              params: { childId: child.id, from: 'dashboard' },
                             })
                           }
                           accentColor="rgba(219, 234, 254, 0.5)"

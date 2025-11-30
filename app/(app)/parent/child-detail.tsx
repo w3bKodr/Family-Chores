@@ -11,6 +11,7 @@ import {
   Easing,
   Dimensions,
   TouchableOpacity,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -68,7 +69,7 @@ const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; 
 
 export default function ChildDetail() {
   const router = useRouter();
-  const { childId } = useLocalSearchParams<{ childId: string }>();
+  const { childId, from } = useLocalSearchParams<{ childId: string; from?: string }>();
   const { user } = useAuthStore();
   const { children, chores, choreCompletions, getChores, getChoreCompletions, getChildren, approveCompletion, rejectCompletion, updateChild } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
@@ -79,6 +80,16 @@ export default function ChildDetail() {
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
   const [selectedDay, setSelectedDay] = useState(FULL_DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+
+  const handleGoBack = () => {
+    if (from === 'family') {
+      router.replace('/(app)/family');
+    } else {
+      router.replace('/(app)/parent-dashboard');
+    }
+  };
 
   const showAlert = (
     title: string,
@@ -268,6 +279,27 @@ export default function ChildDetail() {
     }
   };
 
+  const handleNameChange = async () => {
+    if (!child || !editedName.trim()) {
+      showAlert('Error', 'Name cannot be empty', 'error');
+      return;
+    }
+    try {
+      await updateChild(childId as string, { display_name: editedName.trim() });
+      showAlert('Updated!', 'Child name updated successfully.', 'success');
+      setIsEditingName(false);
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+    }
+  };
+
+  const startEditingName = () => {
+    if (child) {
+      setEditedName(child.display_name);
+      setIsEditingName(true);
+    }
+  };
+
   if (!child) {
     return (
       <SafeAreaView style={styles.container}>
@@ -296,18 +328,40 @@ export default function ChildDetail() {
       <View style={styles.premiumHeader}>
         <View style={styles.headerTop}>
           <TouchableOpacity 
-            onPress={() => router.back()}
+            onPress={handleGoBack}
             style={styles.backButton}
           >
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{child.display_name}</Text>
-          <TouchableOpacity 
-            onPress={() => setShowEmojiPicker(true)}
-            style={styles.editButton}
-          >
-            <Ionicons name="pencil" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+          
+          {/* Editable Name */}
+          {isEditingName ? (
+            <View style={styles.nameEditContainer}>
+              <TextInput
+                style={styles.nameInput}
+                value={editedName}
+                onChangeText={setEditedName}
+                autoFocus
+                placeholder="Child's name"
+                placeholderTextColor="rgba(255, 255, 255, 0.6)"
+                onSubmitEditing={handleNameChange}
+              />
+              <TouchableOpacity onPress={handleNameChange} style={styles.nameEditButton}>
+                <Ionicons name="checkmark" size={20} color="#10B981" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setIsEditingName(false)} style={styles.nameEditButton}>
+                <Ionicons name="close" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={startEditingName} style={styles.nameTouchable}>
+              <Text style={styles.headerTitle}>{child.display_name}</Text>
+              <Ionicons name="pencil" size={16} color="rgba(255, 255, 255, 0.8)" style={styles.nameEditIcon} />
+            </TouchableOpacity>
+          )}
+          
+          {/* Empty spacer for alignment */}
+          <View style={styles.headerSpacer} />
         </View>
         
         {/* Child Avatar & Points */}
@@ -636,17 +690,46 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: 12,
   },
-  editButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  nameTouchable: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 12,
+  },
+  nameEditIcon: {
+    marginLeft: 8,
+  },
+  nameEditContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+  },
+  nameInput: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'rgba(255, 255, 255, 0.5)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  nameEditButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  headerSpacer: {
+    width: 44,
   },
   profileSection: {
     flexDirection: 'row',

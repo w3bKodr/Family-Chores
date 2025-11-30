@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -170,17 +170,36 @@ export default function ModernBottomTabBar({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [isChildMode, setIsChildMode] = useState(false);
+  const isMounted = useRef(true);
   
-  // Check child mode on mount and periodically
+  // Check child mode on mount only - no polling
   useEffect(() => {
+    isMounted.current = true;
+    
     const checkMode = async () => {
-      const childId = await AsyncStorage.getItem('active_child_id');
-      setIsChildMode(childId !== null);
+      if (!isMounted.current) return;
+      try {
+        const childId = await AsyncStorage.getItem('active_child_id');
+        if (isMounted.current) {
+          setIsChildMode(childId !== null);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
     };
+    
     checkMode();
-    const interval = setInterval(checkMode, 500);
-    return () => clearInterval(interval);
-  }, []);
+    
+    // Listen for navigation state changes instead of polling
+    const unsubscribe = navigation.addListener('state', () => {
+      checkMode();
+    });
+    
+    return () => {
+      isMounted.current = false;
+      unsubscribe();
+    };
+  }, [navigation]);
   // Define which tabs to show based on mode
   const parentTabs = ['parent-dashboard', 'parent-chores', 'parent-rewards', 'family', 'profile'];
   const childTabs = ['child-dashboard', 'child-chores', 'child-rewards', 'child-profile'];
@@ -212,7 +231,9 @@ export default function ModernBottomTabBar({
     return hrefs[routeName] || `/(app)/${routeName}`;
   };
   const handleTabPress = (route: any) => {
-    // Use the tab navigator's native navigation for smoother switching
+    const isFocused = state.routes[state.index]?.name === route.name;
+    
+    // Emit tab press event
     const event = navigation.emit({
       type: 'tabPress',
       target: route.key,
@@ -220,8 +241,11 @@ export default function ModernBottomTabBar({
     });
 
     if (!event.defaultPrevented) {
-      // Navigate to the tab using the built-in navigation
-      navigation.navigate(route.name);
+      // If already focused on this tab, do nothing
+      if (!isFocused) {
+        // Navigate to the tab
+        navigation.navigate(route.name);
+      }
     }
   };
   

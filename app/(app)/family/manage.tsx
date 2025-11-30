@@ -406,48 +406,57 @@ export default function ManageFamilyScreen() {
               <Text style={styles.countText}>{parents.length}</Text>
             </View>
           </View>
-          {parents.length > 0 && (
-            <View style={styles.parentsGrid}>
-              {parents.map((parent) => {
-                const isOwner = parent.id === family.parent_id;
-                const isSelf = parent.id === user?.id;
-                const canRemove = user?.id === family.parent_id && !isSelf;
-                
-                return (
-                  <View key={parent.id} style={styles.parentCard}>
-                    <View style={styles.parentAvatar}>
-                      <Text style={styles.parentAvatarText}>
-                        {parent.emoji || parent.display_name.charAt(0)}
-                      </Text>
-                    </View>
-                    <View style={styles.parentInfo}>
-                      <Text style={styles.parentName}>{parent.display_name}</Text>
-                      <View style={styles.parentBadges}>
-                        {isOwner && (
-                          <View style={styles.ownerBadge}>
-                            <Text style={styles.ownerBadgeText}>👑 Owner</Text>
-                          </View>
-                        )}
-                        {isSelf && !isOwner && (
-                          <View style={styles.youBadge}>
-                            <Text style={styles.youBadgeText}>You</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    {canRemove && (
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => handleRemoveParentPress(parent)}
-                      >
-                        <Text style={styles.removeButtonText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
+          <View style={styles.parentsGrid}>
+            {parents.map((parent) => {
+              const isOwner = parent.id === family.parent_id;
+              const isSelf = parent.id === user?.id;
+              const canRemove = user?.id === family.parent_id && !isSelf;
+              
+              return (
+                <View key={parent.id} style={styles.parentCard}>
+                  <View style={styles.parentAvatar}>
+                    <Text style={styles.parentAvatarText}>
+                      {parent.emoji || parent.display_name.charAt(0)}
+                    </Text>
                   </View>
-                );
-              })}
+                  <View style={styles.parentInfo}>
+                    <Text style={styles.parentName}>{parent.display_name}</Text>
+                    <View style={styles.parentBadges}>
+                      {isOwner && (
+                        <View style={styles.ownerBadge}>
+                          <Text style={styles.ownerBadgeText}>👑 Owner</Text>
+                        </View>
+                      )}
+                      {isSelf && !isOwner && (
+                        <View style={styles.youBadge}>
+                          <Text style={styles.youBadgeText}>You</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  {canRemove && (
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveParentPress(parent)}
+                    >
+                      <Text style={styles.removeButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            
+            {/* Invite Parent Card */}
+            <View style={styles.inviteParentCard}>
+              <View style={styles.inviteParentIcon}>
+                <Text style={styles.inviteParentEmoji}>👋</Text>
+              </View>
+              <Text style={styles.inviteParentTitle}>Invite a Parent</Text>
+              <Text style={styles.inviteParentText}>
+                Have them create an account, tap "Join Family", and enter the family code shown above.
+              </Text>
             </View>
-          )}
+          </View>
         </View>
 
         {/* Children Section */}
@@ -479,7 +488,7 @@ export default function ManageFamilyScreen() {
                   onPress={() =>
                     router.push({
                       pathname: '/(app)/parent/child-detail',
-                      params: { childId: child.id },
+                      params: { childId: child.id, from: 'family' },
                     })
                   }
                   style={styles.childCard}
@@ -1056,6 +1065,57 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#6B7280',
+  },
+  
+  // Invite Parent Card
+  inviteParentCard: {
+    backgroundColor: '#FBF8F3',
+    borderRadius: 24,
+    padding: 20,
+    width: '47%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    borderStyle: 'dashed',
+  },
+  inviteParentIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  inviteParentEmoji: {
+    fontSize: 24,
+  },
+  inviteParentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A2E',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  inviteParentText: {
+    fontSize: 11,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  inviteCodeBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  inviteCodeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8B5CF6',
+    letterSpacing: 1,
   },
   
   // Request Card

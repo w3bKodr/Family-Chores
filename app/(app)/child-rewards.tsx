@@ -203,49 +203,72 @@ export default function ChildRewardsScreen() {
 
   const [child, setChild] = useState<any>(null);
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
+  
+  // Track if data has been loaded to prevent infinite loops
+  const dataLoadedRef = useRef(false);
+  const familyIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadActiveChild();
   }, []);
 
-  // Fetch family data if not already loaded
+  // Fetch family data if not already loaded - only trigger on family_id change
   useEffect(() => {
     if (user?.family_id && !family) {
       getFamily(user.family_id);
     }
-  }, [user, family]);
+  }, [user?.family_id]);
 
+  // Set child when activeChildId or children change - avoid unnecessary state updates
   useEffect(() => {
-    // Try to find child by active_child_id first, then by user_id
     if (children.length > 0) {
       if (activeChildId) {
         const activeChild = children.find((c) => c.id === activeChildId);
-        if (activeChild) {
+        if (activeChild && activeChild.id !== child?.id) {
           setChild(activeChild);
           return;
         }
       }
-      // Fallback: try to find by user_id
       if (user?.id) {
         const userChild = children.find((c) => c.user_id === user.id);
-        if (userChild) {
+        if (userChild && userChild.id !== child?.id) {
           setChild(userChild);
         }
       }
     }
-  }, [activeChildId, children, user]);
+  }, [activeChildId, children, user?.id]);
 
   const loadActiveChild = async () => {
     const childId = await AsyncStorage.getItem('active_child_id');
     setActiveChildId(childId);
   };
 
+  // Load data only when family ID changes
   useEffect(() => {
-    loadData();
-  }, [family]);
+    if (family?.id && family.id !== familyIdRef.current) {
+      familyIdRef.current = family.id;
+      loadData();
+    }
+  }, [family?.id]);
 
   const loadData = async () => {
+    if (!family?.id || dataLoadedRef.current) return;
+    dataLoadedRef.current = true;
+    try {
+      await Promise.all([
+        getChildren(family.id),
+        getRewards(family.id),
+        getRewardClaims(family.id),
+      ]);
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+      dataLoadedRef.current = false; // Allow retry on error
+    }
+  };
+
+  const handleRefresh = async () => {
     if (!family?.id) return;
+    setRefreshing(true);
     try {
       await Promise.all([
         getChildren(family.id),
@@ -255,11 +278,6 @@ export default function ChildRewardsScreen() {
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
     }
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadData();
     setRefreshing(false);
   };
 
