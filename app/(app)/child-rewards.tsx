@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@lib/store/authStore';
+import { useFocusEffect } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { AlertModal } from '@components/AlertModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -208,9 +209,24 @@ export default function ChildRewardsScreen() {
   const dataLoadedRef = useRef(false);
   const familyIdRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    loadActiveChild();
-  }, []);
+  // Load active child when screen is focused (not just on mount)
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadChild = async () => {
+        const childId = await AsyncStorage.getItem('active_child_id');
+        setActiveChildId(childId);
+        
+        // Immediately set child if children are already loaded
+        if (childId && children.length > 0) {
+          const activeChild = children.find((c) => c.id === childId);
+          if (activeChild) {
+            setChild(activeChild);
+          }
+        }
+      };
+      loadChild();
+    }, [children])
+  );
 
   // Fetch family data if not already loaded - only trigger on family_id change
   useEffect(() => {
@@ -219,21 +235,17 @@ export default function ChildRewardsScreen() {
     }
   }, [user?.family_id]);
 
-  // Set child when activeChildId or children change - avoid unnecessary state updates
+  // Set child when activeChildId or children change
   useEffect(() => {
-    if (children.length > 0) {
-      if (activeChildId) {
-        const activeChild = children.find((c) => c.id === activeChildId);
-        if (activeChild && activeChild.id !== child?.id) {
-          setChild(activeChild);
-          return;
-        }
+    if (children.length > 0 && activeChildId) {
+      const activeChild = children.find((c) => c.id === activeChildId);
+      if (activeChild) {
+        setChild(activeChild);
       }
-      if (user?.id) {
-        const userChild = children.find((c) => c.user_id === user.id);
-        if (userChild && userChild.id !== child?.id) {
-          setChild(userChild);
-        }
+    } else if (children.length > 0 && user?.id && !activeChildId) {
+      const userChild = children.find((c) => c.user_id === user.id);
+      if (userChild) {
+        setChild(userChild);
       }
     }
   }, [activeChildId, children, user?.id]);
