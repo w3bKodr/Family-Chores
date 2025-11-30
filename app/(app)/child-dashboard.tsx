@@ -481,7 +481,7 @@ export default function ChildDashboard() {
                 
                 {/* Icon - Large & Bold */}
                 <View style={styles.actionIconWrapper}>
-                  <Ionicons name="checkmark-circle" size={44} color="#FFFFFF" />
+                  <Ionicons name="checkmark-circle" size={52} color="#FFFFFF" />
                 </View>
                 
                 {/* Text Content */}
@@ -507,7 +507,7 @@ export default function ChildDashboard() {
                 
                 {/* Icon - Large & Bold */}
                 <View style={styles.actionIconWrapper}>
-                  <Ionicons name="gift" size={44} color="#FFFFFF" />
+                  <Ionicons name="gift" size={52} color="#FFFFFF" />
                 </View>
                 
                 {/* Text Content */}
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexBasis: 0,
     minWidth: 0,
-    height: 168,
+    height: 180,
     borderRadius: 24,
     overflow: 'hidden',
     shadowColor: 'rgba(0, 0, 0, 0.12)',
@@ -750,15 +750,15 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   actionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+    marginBottom: 4,
   },
   actionSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
     color: '#FFFFFF',
     opacity: 0.88,
-    marginTop: 4,
   },
 });

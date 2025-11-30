@@ -8,8 +8,10 @@ import {
   Pressable,
   Animated,
   Easing,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
@@ -101,8 +103,25 @@ export default function AddChild() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Premium Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            onPress={() => router.push('/(app)/family/manage')}
+            style={styles.backButton}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Add Child</Text>
+            <Text style={styles.headerSubtitle}>Add a new family member</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
+        <View style={styles.avatarSection}>
           <View style={styles.iconCircle}>
             <LinearGradient
               colors={['#FF6B35', '#FF8F5A']}
@@ -111,7 +130,6 @@ export default function AddChild() {
               <Text style={styles.icon}>{selectedEmoji}</Text>
             </LinearGradient>
           </View>
-          <Text style={styles.title}>Add Child</Text>
           <Text style={styles.subtitle}>
             Add a child to your family without creating a separate account
           </Text>
@@ -182,12 +200,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FBF8F3',
   },
+  premiumHeader: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  headerSpacer: {
+    width: 44,
+  },
   scrollContent: {
     padding: 20,
     paddingTop: 24,
     paddingBottom: 120,
   },
-  header: {
+  avatarSection: {
     alignItems: 'center',
     marginBottom: 32,
   },
@@ -211,13 +273,6 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 56,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#1A1A2E',
-    marginBottom: 8,
-    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 15,

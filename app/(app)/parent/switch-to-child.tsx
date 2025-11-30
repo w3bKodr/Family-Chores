@@ -134,7 +134,7 @@ export default function SwitchToChild() {
       <View style={styles.premiumHeader}>
         <View style={styles.headerTop}>
           <TouchableOpacity 
-            onPress={() => router.back()}
+            onPress={() => router.push('/(app)/parent/dashboard')}
             style={styles.backButton}
           >
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
@@ -248,7 +248,7 @@ export default function SwitchToChild() {
 
         {/* Bottom Cancel Button */}
         <TouchableOpacity 
-          onPress={() => router.back()}
+          onPress={() => router.push('/(app)/parent/dashboard')}
           style={styles.cancelButton}
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
