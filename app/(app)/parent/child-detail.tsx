@@ -689,12 +689,7 @@ export default function ChildDetail() {
 
                 {/* Active Chores */}
                 <View style={[styles.modernKpiCard, styles.kpiCardSecondary]}>
-                  <View style={styles.kpiHeaderRow}>
-                    <Text style={styles.kpiLabel}>Active Chores</Text>
-                    <View style={[styles.modernIconBadge, styles.iconBadgeCyan, { borderWidth: 1.5 }]}>
-                      <Ionicons name="checkmark-circle" size={28} color="#06B6D4" />
-                    </View>
-                  </View>
+                  <Text style={styles.kpiLabel}>Active Chores</Text>
                   <View style={styles.kpiValueContainer}>
                     <Text style={[styles.kpiValue, { color: '#06B6D4' }]}>
                       {(() => {
