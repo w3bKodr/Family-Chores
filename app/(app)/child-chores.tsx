@@ -113,9 +113,14 @@ export default function ChildChoresScreen() {
             setChild(activeChild);
           }
         }
+
+        // Refresh choreCompletions when this page comes into focus
+        if (family?.id) {
+          await getChoreCompletions(family.id);
+        }
       };
       loadChild();
-    }, [children])
+    }, [children, family?.id, getChoreCompletions])
   );
 
   // Fetch family data if not already loaded - only trigger on family_id change
@@ -206,15 +211,30 @@ export default function ChildChoresScreen() {
 
   const isToday = selectedDay === today;
 
+  // Get the start of the current week (Monday) in local timezone
+  const getStartOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  // Format date as YYYY-MM-DD in local timezone (not UTC)
+  const formatDateLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const getDateForDay = (dayName: string) => {
-    // Get a date string for the selected day
     const dayIndex = DAYS.indexOf(dayName);
-    const currentDayIndex = DAYS.indexOf(today);
-    const dayDiff = dayIndex - currentDayIndex;
-    
-    const date = new Date();
-    date.setDate(date.getDate() + dayDiff);
-    return date.toISOString().split('T')[0];
+    const weekStart = getStartOfWeek(new Date());
+    const targetDate = new Date(weekStart);
+    targetDate.setDate(weekStart.getDate() + dayIndex);
+    return formatDateLocal(targetDate);
   };
 
   const selectedDate = isToday ? todayDate : getDateForDay(selectedDay);

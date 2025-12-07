@@ -268,7 +268,7 @@ const GoldenStars = ({ points }: { points: number }) => {
 export default function ParentDashboard() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { family, children, choreCompletions, joinRequests, parentJoinRequests, rewardClaims, getFamily, getChildren, getChoreCompletions, getJoinRequests, getParentJoinRequests, getRewardClaims, cancelParentJoinRequest } = useFamilyStore();
+  const { family, children, chores, choreCompletions, joinRequests, parentJoinRequests, rewardClaims, getFamily, getChildren, getChores, getChoreCompletions, getJoinRequests, getParentJoinRequests, getRewardClaims, cancelParentJoinRequest } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -333,6 +333,7 @@ export default function ParentDashboard() {
       await Promise.all([
         getFamily(user.family_id),
         getChildren(user.family_id),
+        getChores(user.family_id),
         getChoreCompletions(user.family_id),
         getJoinRequests(user.family_id),
         getParentJoinRequests(user.family_id),
@@ -584,6 +585,20 @@ export default function ParentDashboard() {
                             <View style={styles.childCardDetails}>
                               <Text style={styles.premiumChildName}>{child.display_name}</Text>
                               <GoldenStars points={child.points} />
+                            </View>
+                            <View style={styles.choreCountBadge}>
+                              <Text style={styles.choreCountLabel}>Today</Text>
+                              <Text style={styles.choreCountNumber}>
+                                {(() => {
+                                  const today = new Date().toISOString().split('T')[0];
+                                  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+                                  const todayChores = (Array.isArray(chores) ? chores : []).filter((c: any) => c.assigned_to === child.id && c.repeating_days.includes(dayName));
+                                  const completedToday = (Array.isArray(choreCompletions) ? choreCompletions : []).filter(
+                                    (cc: any) => cc.completed_by === child.id && cc.completed_date === today && cc.status === 'approved'
+                                  ).length;
+                                  return `${completedToday}/${todayChores.length}`;
+                                })()}
+                              </Text>
                             </View>
                           </View>
                         </PremiumCard>
@@ -1057,6 +1072,39 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#92400E',
     marginLeft: 0,
+  },
+
+  // ===== CHORE COUNT BADGE =====
+  choreCountBadge: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    shadowColor: 'rgba(16, 185, 129, 0.15)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 3,
+    minWidth: 100,
+  },
+  choreCountLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#10B981',
+    opacity: 0.8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  choreCountNumber: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: -0.5,
   },
 
   // Legacy star badge (for compatibility)

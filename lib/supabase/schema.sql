@@ -552,6 +552,14 @@ CREATE POLICY "Parents can update completions" ON public.chore_completions
     )
   );
 
+CREATE POLICY "Parents can delete completions" ON public.chore_completions
+  FOR DELETE USING (
+    chore_id IN (
+      SELECT id FROM public.chores 
+      WHERE family_id IN (SELECT id FROM public.families WHERE parent_id = auth.uid())
+    )
+  );
+
 -- Rewards table policies
 ALTER TABLE public.rewards ENABLE ROW LEVEL SECURITY;
 

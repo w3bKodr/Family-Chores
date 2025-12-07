@@ -5,7 +5,10 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  Animated,
+  Easing,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 interface ConfirmModalProps {
   visible: boolean;
@@ -15,7 +18,7 @@ interface ConfirmModalProps {
   message?: string;
   confirmText?: string;
   cancelText?: string;
-  type?: 'default' | 'danger';
+  type?: 'default' | 'danger' | 'success';
 }
 
 export function ConfirmModal({
@@ -28,9 +31,76 @@ export function ConfirmModal({
   cancelText = 'Cancel',
   type = 'default',
 }: ConfirmModalProps) {
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+  const opacityAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.8,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
   const handleConfirm = () => {
     onConfirm();
     onClose();
+  };
+
+  const getIconColor = () => {
+    switch (type) {
+      case 'danger':
+        return '#EF4444';
+      case 'success':
+        return '#10B981';
+      default:
+        return '#0EA5E9';
+    }
+  };
+
+  const getButtonColor = () => {
+    switch (type) {
+      case 'danger':
+        return '#EF4444';
+      case 'success':
+        return '#10B981';
+      default:
+        return '#0EA5E9';
+    }
+  };
+
+  const getIcon = () => {
+    switch (type) {
+      case 'danger':
+        return 'alert-circle';
+      case 'success':
+        return 'checkmark-circle';
+      default:
+        return 'information-circle';
+    }
   };
 
   return (
@@ -46,35 +116,47 @@ export function ConfirmModal({
           activeOpacity={1} 
           onPress={onClose}
         />
-        <View style={styles.modal}>
-          <View style={[
-            styles.iconCircle,
-            type === 'danger' ? styles.iconDanger : styles.iconDefault
-          ]}>
-            <Text style={styles.icon}>{type === 'danger' ? '⚠️' : 'ℹ️'}</Text>
-          </View>
-          
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+            },
+          ]}
+        >
+          <View style={styles.modal}>
+            {/* Icon with gradient background */}
+            <View style={[styles.iconCircle, { backgroundColor: `${getIconColor()}15` }]}>
+              <Ionicons 
+                name={getIcon() as any} 
+                size={40} 
+                color={getIconColor()} 
+              />
+            </View>
+            
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.message}>{message}</Text>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
-            >
-              <Text style={styles.cancelButtonText}>{cancelText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                type === 'danger' ? styles.dangerButton : styles.confirmButton
-              ]}
-              onPress={handleConfirm}
-            >
-              <Text style={styles.confirmButtonText}>{confirmText}</Text>
-            </TouchableOpacity>
+            {/* Button Row */}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, { backgroundColor: getButtonColor() }]}
+                onPress={handleConfirm}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.confirmButtonText}>{confirmText}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -85,6 +167,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   backdrop: {
     position: 'absolute',
@@ -92,79 +175,90 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContainer: {
+    zIndex: 10,
   },
   modal: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 32,
+    borderRadius: 28,
+    paddingHorizontal: 32,
+    paddingVertical: 40,
     width: '85%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    maxWidth: 420,
+    shadowColor: 'rgba(0, 0, 0, 0.15)',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 1,
+    shadowRadius: 40,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    marginBottom: 16,
-  },
-  iconDefault: {
-    backgroundColor: '#DBEAFE',
-  },
-  iconDanger: {
-    backgroundColor: '#FEE2E2',
-  },
-  icon: {
-    fontSize: 32,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: -0.3,
   },
   message: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
     lineHeight: 24,
+    fontWeight: '500',
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  button: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
+    gap: 14,
   },
   cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
     backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   cancelButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#6B7280',
+    letterSpacing: -0.2,
   },
   confirmButton: {
-    backgroundColor: '#3B82F6',
-  },
-  dangerButton: {
-    backgroundColor: '#EF4444',
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 6,
   },
   confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
 });

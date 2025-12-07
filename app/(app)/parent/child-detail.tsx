@@ -82,6 +82,8 @@ export default function ChildDetail() {
   const [selectedDay, setSelectedDay] = useState(FULL_DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
+  const [selectedTab, setSelectedTab] = useState<'overview' | 'chores'>('overview');
+  const [completeChoreModal, setCompleteChoreModal] = useState<{ visible: boolean; chore: any | null; date?: string }>({ visible: false, chore: null });
 
   const handleGoBack = () => {
     if (from === 'family') {
@@ -140,8 +142,61 @@ export default function ChildDetail() {
 
   const handleReject = async (completionId: string) => {
     try {
-      await rejectCompletion(completionId);
-      showAlert('Rejected', 'Chore completion rejected.', 'error');
+      // Delete the completion row completely so it's as if it never happened
+      const { error } = await supabase
+        .from('chore_completions')
+        .delete()
+        .eq('id', completionId);
+
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+
+      console.log('Completion deleted successfully');
+
+      // Remove from local store immediately so parent doesn't see it
+      const currentCompletions = useFamilyStore.getState().choreCompletions;
+      const filtered = currentCompletions.filter(c => c.id !== completionId);
+      useFamilyStore.setState({ choreCompletions: filtered });
+
+      showAlert('Rejected', 'Chore removed. Child needs to complete it again.', 'info');
+    } catch (error: any) {
+      console.error('Reject error:', error);
+      showAlert('Error', error.message, 'error');
+    }
+  };
+
+  const handleCompleteChore = async (chore: any) => {
+    if (!child || !user?.id) return;
+    try {
+      // Use the date from the modal state (selected day), not today
+      const completionDate = completeChoreModal.date || new Date().toISOString().split('T')[0];
+      
+      // Create a new completion record as approved
+      const { error: insertError } = await supabase
+        .from('chore_completions')
+        .insert({
+          chore_id: chore.id,
+          completed_by: childId,
+          completed_date: completionDate,
+          status: 'approved',
+          approved_by: user.id,
+          approved_at: new Date().toISOString(),
+        });
+
+      if (insertError) throw insertError;
+
+      // Award points to child
+      const { error: childError } = await supabase
+        .from('children')
+        .update({ points: child.points + chore.points })
+        .eq('id', child.id);
+
+      if (childError) throw childError;
+
+      showAlert('Chore Completed!', `${chore.title} marked as done and +${chore.points} points awarded.`, 'success');
+      setCompleteChoreModal({ visible: false, chore: null });
       await loadData();
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
@@ -151,24 +206,38 @@ export default function ChildDetail() {
   const handleUnapprove = async (completion: any, chore: any) => {
     if (!child) return;
     try {
-      // Update completion status back to pending
-      const { error: completionError } = await supabase
+      // Delete the completion entirely
+      const { error: deleteError } = await supabase
         .from('chore_completions')
-        .update({ status: 'pending', approved_by: null, approved_at: null })
+        .delete()
         .eq('id', completion.id);
 
-      if (completionError) throw completionError;
+      if (deleteError) throw deleteError;
+
+      // Calculate new points
+      const newPoints = Math.max(0, child.points - chore.points);
 
       // Deduct points from child
       const { error: childError } = await supabase
         .from('children')
-        .update({ points: Math.max(0, child.points - chore.points) })
+        .update({ points: newPoints })
         .eq('id', child.id);
 
       if (childError) throw childError;
 
-      showAlert('Unapproved', 'Chore moved back to pending and points deducted.', 'info');
-      await loadData();
+      // Remove from local store immediately and update points
+      const currentCompletions = useFamilyStore.getState().choreCompletions;
+      const filtered = currentCompletions.filter(c => c.id !== completion.id);
+      useFamilyStore.setState({ choreCompletions: filtered });
+
+      // Update child's points in the store
+      const { children: storeChildren } = useFamilyStore.getState();
+      const updatedChildren = storeChildren.map(c => 
+        c.id === child.id ? { ...c, points: newPoints } : c
+      );
+      useFamilyStore.setState({ children: updatedChildren });
+
+      showAlert('Unapproved', `Chore removed and ${chore.points} points deducted.`, 'info');
     } catch (error: any) {
       showAlert('Error', error.message, 'error');
     }
@@ -320,76 +389,78 @@ export default function ChildDetail() {
   const notStartedChores = dayChoresWithStatus.filter(item => !item.completion);
   const pendingChores = dayChoresWithStatus.filter(item => item.completion?.status === 'pending');
   const approvedChores = dayChoresWithStatus.filter(item => item.completion?.status === 'approved');
-  const rejectedChores = dayChoresWithStatus.filter(item => item.completion?.status === 'rejected');
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Premium Header */}
-      <View style={styles.premiumHeader}>
-        <View style={styles.headerTop}>
+      {/* Modern Compact Header */}
+      <LinearGradient
+        colors={['#0EA5E9', '#0284C7']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.modernHeader}
+      >
+        <View style={styles.modernHeaderTop}>
           <TouchableOpacity 
             onPress={handleGoBack}
-            style={styles.backButton}
+            style={styles.modernBackButton}
           >
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           
-          {/* Editable Name */}
-          {isEditingName ? (
-            <View style={styles.nameEditContainer}>
-              <TextInput
-                style={styles.nameInput}
-                value={editedName}
-                onChangeText={setEditedName}
-                autoFocus
-                placeholder="Child's name"
-                placeholderTextColor="rgba(255, 255, 255, 0.6)"
-                onSubmitEditing={handleNameChange}
-              />
-              <TouchableOpacity onPress={handleNameChange} style={styles.nameEditButton}>
-                <Ionicons name="checkmark" size={20} color="#10B981" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setIsEditingName(false)} style={styles.nameEditButton}>
-                <Ionicons name="close" size={20} color="#EF4444" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity onPress={startEditingName} style={styles.nameTouchable}>
-              <Text style={styles.headerTitle}>{child.display_name}</Text>
-              <Ionicons name="pencil" size={16} color="rgba(255, 255, 255, 0.8)" style={styles.nameEditIcon} />
-            </TouchableOpacity>
-          )}
-          
-          {/* Empty spacer for alignment */}
-          <View style={styles.headerSpacer} />
-        </View>
-        
-        {/* Child Avatar & Points */}
-        <View style={styles.profileSection}>
-          <Pressable 
-            onPress={() => setShowEmojiPicker(true)}
-            style={styles.avatarContainer}
-          >
-            <View style={styles.avatarOuter}>
-              <View style={styles.avatarInner}>
-                <Text style={styles.avatarEmoji}>{child.emoji || '👶'}</Text>
+          <View style={styles.modernNameSection}>
+            {isEditingName ? (
+              <View style={styles.nameEditContainer}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={editedName}
+                  onChangeText={setEditedName}
+                  autoFocus
+                  placeholder="Child's name"
+                  placeholderTextColor="rgba(0, 0, 0, 0.4)"
+                  onSubmitEditing={handleNameChange}
+                />
+                <TouchableOpacity onPress={handleNameChange} style={styles.nameEditButton}>
+                  <Ionicons name="checkmark" size={18} color="#10B981" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsEditingName(false)} style={styles.nameEditButton}>
+                  <Ionicons name="close" size={18} color="#EF4444" />
+                </TouchableOpacity>
               </View>
-            </View>
-            <View style={styles.editBadge}>
-              <Ionicons name="pencil" size={12} color="#FFFFFF" />
-            </View>
-          </Pressable>
-          
-          {/* Points Card */}
-          <View style={styles.pointsCard}>
-            <Text style={styles.pointsLabel}>TOTAL POINTS</Text>
-            <View style={styles.pointsRow}>
-              <Text style={styles.starIcon}>⭐</Text>
-              <Text style={styles.pointsValue}>{child.points}</Text>
-            </View>
+            ) : (
+              <TouchableOpacity onPress={startEditingName} style={styles.nameEmojiRow}>
+                <Text style={styles.modernEmoji}>{child.emoji || '👶'}</Text>
+                <Text style={styles.modernName}>{child.display_name}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Total Points on Right */}
+          <View style={styles.modernPointsBox}>
+            <Text style={styles.modernPointsLabel}>POINTS</Text>
+            <Text style={styles.modernPointsValue}>{child.points}</Text>
           </View>
         </View>
-      </View>
+
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            onPress={() => setSelectedTab('overview')}
+            style={[styles.tab, selectedTab === 'overview' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, selectedTab === 'overview' && styles.tabTextActive]}>
+              Overview
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setSelectedTab('chores')}
+            style={[styles.tab, selectedTab === 'chores' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, selectedTab === 'chores' && styles.tabTextActive]}>
+              Chores
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -397,8 +468,10 @@ export default function ChildDetail() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Day Selector */}
-        <View style={styles.daySelectorContainer}>
+        {selectedTab === 'chores' && (
+          <>
+            {/* Day Selector */}
+            <View style={styles.daySelectorContainer}>
           <View style={styles.daySelectorCard}>
             <View style={styles.dayButtonsRow}>
               {DAYS.map((day, index) => {
@@ -453,7 +526,14 @@ export default function ChildDetail() {
             </View>
             
             {notStartedChores.map(({ chore }) => (
-              <PremiumCard key={chore.id} style={styles.choreCard}>
+              <PremiumCard 
+                key={chore.id} 
+                style={styles.choreCard}
+                onPress={() => {
+                  const selectedDate = formatDateLocal(getDateForDay(selectedDay));
+                  setCompleteChoreModal({ visible: true, chore, date: selectedDate });
+                }}
+              >
                 <View style={styles.choreInfo}>
                   <View style={[styles.choreEmoji, styles.choreEmojiNotStarted]}>
                     <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
@@ -572,35 +652,6 @@ export default function ChildDetail() {
         )}
 
         {/* Rejected Chores */}
-        {rejectedChores.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <View style={[styles.sectionIconContainer, styles.sectionIconRed]}>
-                  <Ionicons name="close-circle" size={18} color="#EF4444" />
-                </View>
-                <Text style={styles.sectionTitle}>Rejected</Text>
-              </View>
-            </View>
-            
-            {rejectedChores.map(({ completion, chore }) => (
-              <PremiumCard key={completion!.id} style={[styles.choreCard, styles.choreCardRejected]}>
-                <View style={styles.choreInfo}>
-                  <View style={[styles.choreEmoji, styles.choreEmojiRejected]}>
-                    <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
-                  </View>
-                  <View style={styles.choreDetails}>
-                    <Text style={[styles.choreTitle, styles.choreTitleRejected]}>{chore.title}</Text>
-                  </View>
-                </View>
-                <View style={styles.rejectedBadge}>
-                  <Ionicons name="close" size={20} color="#EF4444" />
-                </View>
-              </PremiumCard>
-            ))}
-          </View>
-        )}
-
         {dayChoresWithStatus.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>📅</Text>
@@ -610,15 +661,150 @@ export default function ChildDetail() {
             </Text>
           </View>
         )}
+          </>
+        )}
 
-        <View style={styles.dangerZone}>
-          <Button
-            title="🗑️ Remove Child from Family"
-            onPress={() => setShowDeleteConfirm(true)}
-            variant="danger"
-            size="lg"
-          />
-        </View>
+        {selectedTab === 'overview' && (
+          <>
+            {/* MODERN LUXURY STATISTICS DASHBOARD */}
+            <View style={styles.modernOverviewContainer}>
+              
+              {/* TOP ROW: Today's Progress (2/3) + Active Chores (1/3) */}
+              <View style={styles.topMetricsRow}>
+                {/* Today's Progress */}
+                <View style={[styles.modernKpiCard, styles.kpiCardPrimary]}>
+                  <Text style={styles.kpiLabel}>Today's Progress</Text>
+                  <View style={styles.kpiValueContainer}>
+                    <Text style={[styles.kpiValue, { color: '#10B981' }]}>
+                      {(() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        return choreCompletions.filter(
+                          cc => cc.completed_by === childId && cc.completed_date === today && cc.status === 'approved'
+                        ).length;
+                      })()}
+                    </Text>
+                    <Text style={styles.kpiValueLabel}>completed</Text>
+                  </View>
+                </View>
+
+                {/* Active Chores */}
+                <View style={[styles.modernKpiCard, styles.kpiCardSecondary]}>
+                  <View style={styles.kpiHeaderRow}>
+                    <Text style={styles.kpiLabel}>Active Chores</Text>
+                    <View style={[styles.modernIconBadge, styles.iconBadgeCyan, { borderWidth: 1.5 }]}>
+                      <Ionicons name="checkmark-circle" size={28} color="#06B6D4" />
+                    </View>
+                  </View>
+                  <View style={styles.kpiValueContainer}>
+                    <Text style={[styles.kpiValue, { color: '#06B6D4' }]}>
+                      {(() => {
+                        const today = FULL_DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1];
+                        return chores.filter(c => c.assigned_to === childId && c.repeating_days?.includes(today)).length;
+                      })()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* TIME-BASED STATS ROW: This Week / Month / Year */}
+              <View style={styles.timeStatsRow}>
+                {/* This Week */}
+                <View style={[styles.modernStatCard, styles.statCardWeek]}>
+                  <View style={[styles.statIconContainer, styles.statIconContainerWeek]}>
+                    <Ionicons name="trending-up" size={28} color="#06B6D4" />
+                  </View>
+                  <Text style={styles.statValue}>
+                    {(() => {
+                      const weekStart = new Date();
+                      weekStart.setDate(weekStart.getDate() - (weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1));
+                      weekStart.setHours(0, 0, 0, 0);
+                      
+                      return choreCompletions.filter(cc => {
+                        const completionDate = new Date(cc.completed_date);
+                        return cc.completed_by === childId && 
+                               completionDate >= weekStart && 
+                               cc.status === 'approved';
+                      }).length;
+                    })()}
+                  </Text>
+                  <Text style={styles.statLabel}>This Week</Text>
+                </View>
+
+                {/* This Month */}
+                <View style={[styles.modernStatCard, styles.statCardMonth]}>
+                  <View style={[styles.statIconContainer, styles.statIconContainerMonth]}>
+                    <Ionicons name="calendar" size={28} color="#FF6B35" />
+                  </View>
+                  <Text style={styles.statValue}>
+                    {(() => {
+                      const monthStart = new Date();
+                      monthStart.setDate(1);
+                      monthStart.setHours(0, 0, 0, 0);
+                      
+                      return choreCompletions.filter(cc => {
+                        const completionDate = new Date(cc.completed_date);
+                        return cc.completed_by === childId && 
+                               completionDate >= monthStart && 
+                               cc.status === 'approved';
+                      }).length;
+                    })()}
+                  </Text>
+                  <Text style={styles.statLabel}>This Month</Text>
+                </View>
+
+                {/* This Year */}
+                <View style={[styles.modernStatCard, styles.statCardYear]}>
+                  <View style={[styles.statIconContainer, styles.statIconContainerYear]}>
+                    <Ionicons name="sparkles" size={28} color="#10B981" />
+                  </View>
+                  <Text style={styles.statValue}>
+                    {(() => {
+                      const yearStart = new Date();
+                      yearStart.setMonth(0);
+                      yearStart.setDate(1);
+                      yearStart.setHours(0, 0, 0, 0);
+                      
+                      return choreCompletions.filter(cc => {
+                        const completionDate = new Date(cc.completed_date);
+                        return cc.completed_by === childId && 
+                               completionDate >= yearStart && 
+                               cc.status === 'approved';
+                      }).length;
+                    })()}
+                  </Text>
+                  <Text style={styles.statLabel}>This Year</Text>
+                </View>
+              </View>
+
+              {/* FULL-WIDTH ACHIEVEMENT CARD: Total Completed Ever */}
+              <View style={[styles.modernAchievementCard, styles.achievementCardFull]}>
+                <View style={styles.achievementHeader}>
+                  <View>
+                    <Text style={styles.achievementLabel}>Total Completed Ever</Text>
+                    <Text style={[styles.achievementValue, { color: '#8B5CF6' }]}>
+                      {choreCompletions.filter(
+                        cc => cc.completed_by === childId && cc.status === 'approved'
+                      ).length}
+                    </Text>
+                  </View>
+                  <View style={[styles.achievementIconBadge, styles.iconBadgePurple]}>
+                    <Ionicons name="star" size={36} color="#8B5CF6" />
+                  </View>
+                </View>
+                <Text style={styles.achievementSubtext}>All-time achievements & milestones</Text>
+              </View>
+            </View>
+
+            <View style={styles.dangerZone}>
+              <Button
+                title="🗑️ Remove Child from Family"
+                onPress={() => setShowDeleteConfirm(true)}
+                variant="danger"
+                size="lg"
+              />
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <ConfirmModal
@@ -630,6 +816,17 @@ export default function ChildDetail() {
         confirmText="Remove"
         cancelText="Cancel"
         type="danger"
+      />
+
+      <ConfirmModal
+        visible={completeChoreModal.visible}
+        onClose={() => setCompleteChoreModal({ visible: false, chore: null, date: undefined })}
+        onConfirm={() => handleCompleteChore(completeChoreModal.chore)}
+        title="Mark Chore Complete"
+        message={`Mark "${completeChoreModal.chore?.title}" as complete for ${child?.display_name}? They will receive +${completeChoreModal.chore?.points} points.`}
+        confirmText="Complete"
+        cancelText="Cancel"
+        type="success"
       />
 
       <AlertModal
@@ -659,6 +856,745 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 120,
   },
+
+  // ===== MODERN HEADER =====
+  modernHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modernHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modernBackButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modernNameSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nameEmojiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  modernEmoji: {
+    fontSize: 36,
+  },
+  modernName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  nameTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modernPointsBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  modernPointsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.85)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modernPointsValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginTop: 2,
+  },
+
+  // ===== TAB NAVIGATION =====
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    padding: 4,
+    marginTop: 12,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  tabActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  tabTextActive: {
+    color: '#0EA5E9',
+  },
+
+  // ===== MODERN PREMIUM OVERVIEW SECTION - 2025 DESIGN =====
+  modernOverviewContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 48,
+    backgroundColor: '#FBF8F3',
+    // Subtle gradient background
+    backgroundImage: 'linear-gradient(135deg, #FBF8F3 0%, #F5F1EB 100%)',
+  },
+
+  // TOP METRICS ROW (Today's Progress + Active Chores)
+  topMetricsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 32,
+    alignItems: 'stretch',
+  },
+
+  modernKpiCard: {
+    borderRadius: 28,
+    paddingHorizontal: 32,
+    paddingVertical: 32,
+    // Layered premium shadow
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    // Glassmorphism effect
+    opacity: 0.99,
+  },
+
+  kpiCardPrimary: {
+    flex: 4, // Today's Progress takes 4/7
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.15)',
+  },
+
+  kpiCardSecondary: {
+    flex: 3, // Active Chores takes 3/7
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    borderColor: 'rgba(6, 182, 212, 0.15)',
+  },
+
+  kpiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+
+  kpiLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    flex: 1,
+  },
+
+  modernIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+
+  kpiValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 12,
+  },
+
+  kpiValue: {
+    fontSize: 76,
+    fontWeight: '900',
+    lineHeight: 88,
+    letterSpacing: -2,
+  },
+
+  kpiValueLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+
+  // TIME STATS ROW (This Week, Month, Year)
+  timeStatsRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 28,
+  },
+
+  modernStatCard: {
+    flex: 1,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 26,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: '#FFFFFF',
+    // Optional: asymmetric curve with slight rotation effect (visual interest)
+    overflow: 'hidden',
+  },
+
+  statCardWeek: {
+    backgroundColor: 'rgba(6, 182, 212, 0.06)',
+    borderColor: 'rgba(6, 182, 212, 0.12)',
+    borderLeftColor: 'rgba(6, 182, 212, 0.3)',
+    borderLeftWidth: 4,
+  },
+
+  statCardMonth: {
+    backgroundColor: 'rgba(255, 107, 53, 0.06)',
+    borderColor: 'rgba(255, 107, 53, 0.12)',
+    borderLeftColor: 'rgba(255, 107, 53, 0.3)',
+    borderLeftWidth: 4,
+  },
+
+  statCardYear: {
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+    borderColor: 'rgba(16, 185, 129, 0.12)',
+    borderLeftColor: 'rgba(16, 185, 129, 0.3)',
+    borderLeftWidth: 4,
+  },
+
+  statIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+
+  statValue: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 10,
+    letterSpacing: -1,
+  },
+
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    letterSpacing: 0.4,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+
+  // ACHIEVEMENT CARD (Full Width) - PREMIUM STANDOUT
+  modernAchievementCard: {
+    borderRadius: 32,
+    paddingHorizontal: 32,
+    paddingVertical: 36,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.2,
+    shadowRadius: 32,
+    elevation: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    backgroundColor: 'rgba(139, 92, 246, 0.04)',
+    overflow: 'hidden',
+  },
+
+  achievementCardFull: {
+    width: '100%',
+  },
+
+  achievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+
+  achievementLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+
+  achievementValue: {
+    fontSize: 76,
+    fontWeight: '900',
+    color: '#8B5CF6',
+    lineHeight: 88,
+    letterSpacing: -2,
+  },
+
+  achievementIconBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+
+  achievementSubtext: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.3,
+  },
+
+  // Icon Badge Color Variants
+  iconBadgeGreen: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+
+  iconBadgeCyan: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: 'rgba(6, 182, 212, 0.25)',
+  },
+
+  iconBadgeCoral: {
+    backgroundColor: 'rgba(255, 107, 53, 0.15)',
+    borderColor: 'rgba(255, 107, 53, 0.25)',
+  },
+
+  iconBadgePurple: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+  },
+
+  // Stat icon container color variants
+  statIconContainerWeek: {
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+  },
+
+  statIconContainerMonth: {
+    backgroundColor: 'rgba(255, 107, 53, 0.12)',
+  },
+
+  statIconContainerYear: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+
+  // Premium Card Animation Base (for PremiumCard component)
+  premiumCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+
+  // ===== LUXURY OVERVIEW SECTION - 2025 DESIGN AWARD =====
+  luxuryOverviewContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 48,
+    backgroundColor: '#FAFAF8',
+  },
+
+  // HERO STATS SECTION
+  heroStatsSection: {
+    marginBottom: 20,
+    gap: 16,
+  },
+
+  // NEW: Top row with Today's Progress (2/3) + Active Chores (1/3)
+  topRowContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+    alignItems: 'stretch',
+  },
+
+  heroStatCard: {
+    flex: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.03)',
+  },
+  heroLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+    marginBottom: 12,
+  },
+  heroValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 12,
+  },
+  heroValue: {
+    fontSize: 96,
+    fontWeight: '900',
+    color: '#10B981',
+    lineHeight: 104,
+  },
+  heroValueSuffix: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#9CA3AF',
+  },
+
+  // QUICK STATS GRID (2 columns)
+  quickStatsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  // QUICK STATS GRID (3 columns)
+  quickStatsGrid3Column: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  quickStatCard: {
+    flex: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    alignItems: 'center',
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.02)',
+  },
+  quickStatCardTeal: {
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+  },
+  quickStatCardCoral: {
+    backgroundColor: 'rgba(255, 107, 53, 0.08)',
+  },
+  quickStatCardGreen: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+  },
+  quickStatCardViolet: {
+    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  },
+  quickStatIcon: {
+    marginBottom: 10,
+  },
+  quickStatValue: {
+    fontSize: 40,
+    fontWeight: '900',
+    marginBottom: 4,
+    color: '#1F2937',
+  },
+  quickStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+  },
+
+  // DETAILED METRICS SECTION
+  detailedMetricsSection: {
+    gap: 16,
+    marginTop: 0,
+  },
+  detailedMetricsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  compactFloatingCard: {
+    flex: 1,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    shadowColor: 'rgba(0, 0, 0, 0.08)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 16,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.02)',
+  },
+  // Active Chores card: 3/7 width
+  activeChoresCard: {
+    flex: 3,
+    justifyContent: 'space-between',
+    paddingVertical: 20,
+  },
+  // Active Chores top row with label and badge
+  activeChoresTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  // Active Chores value row
+  activeChoresValueRow: {
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  // Active Chores number
+  activeChoresValue: {
+    fontSize: 48,
+    fontWeight: '900',
+    lineHeight: 52,
+  },
+  // New: Full width card for All-Time metric
+  fullWidthCard: {
+    flex: undefined,
+  },
+  compactMetricTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  compactMetricLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+    marginBottom: 6,
+  },
+  compactMetricValue: {
+    fontSize: 40,
+    fontWeight: '900',
+    lineHeight: 44,
+  },
+  compactMetricDescription: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+  },
+  luxurySectionTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 20,
+    letterSpacing: -0.4,
+  },
+
+  // FLOATING METRIC CARDS
+  floatingMetricCard: {
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.02)',
+  },
+  floatingMetricCardCoral: {
+    backgroundColor: 'rgba(255, 107, 53, 0.06)',
+  },
+  floatingMetricCardTeal: {
+    backgroundColor: 'rgba(6, 182, 212, 0.06)',
+  },
+  floatingMetricCardGreen: {
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+  },
+  floatingMetricCardViolet: {
+    backgroundColor: 'rgba(139, 92, 246, 0.06)',
+  },
+  floatingMetricTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  floatingMetricSmallLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+    marginBottom: 8,
+  },
+  floatingMetricHugeValue: {
+    fontSize: 72,
+    fontWeight: '900',
+    lineHeight: 80,
+  },
+  coralGradientBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#FF6B35',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tealGradientBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#06B6D4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  greenGradientBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  violetGradientBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingMetricDescription: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    letterSpacing: 0.2,
+  },
+
+  // ===== PROGRESS SECTION =====
+  progressSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  progressCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  progressLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    flex: 1,
+  },
+  statsRowCompact: {
+    flexDirection: 'row',
+    gap: 12,
+    flex: 1,
+  },
+  progressBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  progressPercent: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  progressBarContainer: {
+    height: 10,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 5,
+  },
+  progressBarWeekly: {
+    backgroundColor: '#10B981',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+
   premiumHeader: {
     backgroundColor: '#0EA5E9',
     paddingHorizontal: 20,
@@ -1002,9 +1938,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
   },
   choreCardRejected: {
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    backgroundColor: 'rgba(254, 242, 242, 0.8)',
-    opacity: 0.7,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(255, 251, 235, 0.6)',
   },
   choreInfo: {
     flexDirection: 'row',
@@ -1045,10 +1980,6 @@ const styles = StyleSheet.create({
     color: '#1A1A2E',
     marginBottom: 6,
     letterSpacing: -0.3,
-  },
-  choreTitleRejected: {
-    textDecorationLine: 'line-through',
-    color: '#9CA3AF',
   },
   choreDescription: {
     fontSize: 13,
@@ -1122,6 +2053,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255, 107, 53, 0.3)',
+  },
+  resubmitButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   rejectedBadge: {
     width: 36,

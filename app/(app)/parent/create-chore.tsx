@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '@lib/store/authStore';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { Button } from '@components/Button';
@@ -74,7 +74,7 @@ export default function CreateChore() {
   const { family, children, chores, createChore, updateChore, loading } = useFamilyStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [points, setPoints] = useState('10');
+  const [points, setPoints] = useState('1');
   const [emoji, setEmoji] = useState('✓');
   const [selectedChild, setSelectedChild] = useState<string | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
@@ -83,8 +83,16 @@ export default function CreateChore() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const isEditMode = edit === 'true' && choreId;
+
+  // Scroll to top when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   // Load existing chore data if in edit mode
   useEffect(() => {
@@ -98,6 +106,14 @@ export default function CreateChore() {
         setSelectedChild(existingChore.assigned_to);
         setSelectedDays(existingChore.repeating_days);
       }
+    } else {
+      // Reset form when creating a new chore
+      setTitle('');
+      setDescription('');
+      setPoints('1');
+      setEmoji('✓');
+      setSelectedChild(null);
+      setSelectedDays([]);
     }
   }, [isEditMode, choreId, chores]);
 
@@ -168,30 +184,26 @@ export default function CreateChore() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Back Button */}
-        <TouchableOpacity 
-          onPress={() => router.replace('/(app)/parent-chores')}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color="#374151" />
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-
-        <View style={styles.header}>
-          <LinearGradient
-            colors={['#FF6B35', '#F7931E']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconCircle}
+      {/* Premium Green Header */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity 
+            onPress={() => router.replace('/(app)/parent-chores')}
+            style={styles.headerBackButton}
           >
-            <Text style={styles.icon}>{isEditMode ? '✏️' : '➕'}</Text>
-          </LinearGradient>
-          <Text style={styles.title}>{isEditMode ? 'Edit Chore' : 'Create Chore'}</Text>
-          <Text style={styles.subtitle}>
-            {isEditMode ? 'Update the task details' : 'Add a new task for your child'}
-          </Text>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>{isEditMode ? 'Edit Chore' : 'Create Chore'}</Text>
+            <Text style={styles.headerSubtitle}>
+              {isEditMode ? 'Update the task details' : 'Add a new task for your child'}
+            </Text>
+          </View>
+          <View style={styles.headerSpacer} />
         </View>
+      </View>
+
+      <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Choose Emoji</Text>
@@ -223,7 +235,7 @@ export default function CreateChore() {
 
           <Input
             label="Points"
-            placeholder="10"
+            placeholder="1"
             value={points}
             onChangeText={setPoints}
             keyboardType="numeric"
@@ -293,7 +305,7 @@ export default function CreateChore() {
 
         <PremiumCard style={styles.primaryButton} onPress={handleCreateChore}>
           <LinearGradient
-            colors={['#FF6B35', '#F7931E']}
+            colors={['#10B981', '#059669']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.primaryButtonGradient}
@@ -335,9 +347,57 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FBF8F3',
   },
+  
+  // ===== PREMIUM HEADER =====
+  premiumHeader: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  headerBackButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  headerSpacer: {
+    width: 44,
+  },
+
   scrollContent: {
     padding: 20,
-    paddingTop: 12,
+    paddingTop: 20,
     paddingBottom: 120,
   },
   backButton: {
@@ -364,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
-    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowColor: 'rgba(16, 185, 129, 0.3)',
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 20,
     elevation: 8,
@@ -417,7 +477,7 @@ const styles = StyleSheet.create({
   },
   changeLinkText: {
     fontSize: 15,
-    color: '#FF6B35',
+    color: '#10B981',
     fontWeight: '600',
   },
   childList: {
@@ -434,8 +494,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   childItemSelected: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FCD34D',
+    backgroundColor: '#E0F2FE',
+    borderColor: '#0EA5E9',
   },
   childInfo: {
     flexDirection: 'row',
@@ -455,7 +515,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   childAvatarSelected: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: '#0EA5E9',
   },
   childAvatarEmoji: {
     fontSize: 20,
@@ -467,32 +527,35 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   childNameSelected: {
-    color: '#92400E',
+    color: '#0369A1',
   },
   checkmark: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#0369A1',
   },
   daysGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    gap: 8,
   },
   dayButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 16,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: 'rgba(0, 0, 0, 0.06)',
     backgroundColor: '#FBF8F3',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayButtonSelected: {
-    backgroundColor: '#FF6B35',
-    borderColor: '#FF6B35',
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
   },
   dayText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#4B5563',
   },
@@ -504,7 +567,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 8,
     marginBottom: 8,
-    shadowColor: 'rgba(255, 107, 53, 0.3)',
+    shadowColor: 'rgba(16, 185, 129, 0.3)',
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
     elevation: 4,
@@ -528,7 +591,7 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     fontSize: 16,
-    color: '#FF6B35',
+    color: '#10B981',
     fontWeight: '600',
   },
 });
