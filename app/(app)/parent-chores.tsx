@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
+import { parseDateStringLocal } from '@lib/utils/dates';
 import { AlertModal } from '@components/AlertModal';
 import { ConfirmModal } from '@components/ConfirmModal';
 
@@ -105,7 +106,7 @@ export default function ParentChores() {
   const router = useRouter();
   const { chores, choreCompletions, children, getChores, getChoreCompletions, family, deleteChore } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'schedule' | 'history'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'adHoc' | 'history'>('schedule');
   const [selectedScheduleDay, setSelectedScheduleDay] = useState(getTodayIndex());
   const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, -1 = last week, etc.
   const [selectedHistoryDay, setSelectedHistoryDay] = useState(getTodayIndex());
@@ -115,6 +116,7 @@ export default function ParentChores() {
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [choreToDelete, setChoreToDelete] = useState<string | null>(null);
+  const [showPastChores, setShowPastChores] = useState(false);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
@@ -234,11 +236,25 @@ export default function ParentChores() {
           >
             <Ionicons 
               name="calendar-outline" 
-              size={18} 
+              size={16} 
               color={activeTab === 'schedule' ? '#10B981' : 'rgba(255,255,255,0.7)'} 
             />
             <Text style={[styles.tabText, activeTab === 'schedule' && styles.tabTextActive]}>
-              Weekly Schedule
+              Recurring Chores
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('adHoc')}
+            style={[styles.tab, activeTab === 'adHoc' && styles.tabActive]}
+          >
+            <Ionicons
+              name="flash-outline"
+              size={16}
+              color={activeTab === 'adHoc' ? '#10B981' : 'rgba(255,255,255,0.7)'}
+            />
+            <Text style={[styles.tabText, activeTab === 'adHoc' && styles.tabTextActive]}>
+              Ad-Hoc Chores
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -247,7 +263,7 @@ export default function ParentChores() {
           >
             <Ionicons 
               name="time-outline" 
-              size={18} 
+              size={16} 
               color={activeTab === 'history' ? '#10B981' : 'rgba(255,255,255,0.7)'} 
             />
             <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
@@ -390,6 +406,121 @@ export default function ParentChores() {
                   ))}
                 </View>
               )}
+            </View>
+          </>
+        ) : activeTab === 'adHoc' ? (
+          // ========== AD-HOC CHORES TAB ==========
+          <>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={styles.sectionIcon}>
+                  <Ionicons name="flash" size={20} color="#10B981" />
+                </View>
+                <Text style={styles.sectionTitle}>Ad-Hoc Chores</Text>
+              </View>
+              <Text style={styles.sectionSubtitle}>
+                One-off chores scheduled for specific dates
+              </Text>
+            </View>
+
+            {/* Filter Button */}
+            <View style={styles.filterButtonContainer}>
+              <TouchableOpacity
+                onPress={() => setShowPastChores(!showPastChores)}
+                style={[styles.filterButton, showPastChores && styles.filterButtonActive]}
+              >
+                <Ionicons 
+                  name={showPastChores ? "eye" : "eye-off"} 
+                  size={16} 
+                  color={showPastChores ? "#10B981" : "#8F92A1"} 
+                />
+                <Text style={[styles.filterButtonText, showPastChores && styles.filterButtonTextActive]}>
+                  {showPastChores ? 'Showing Past Chores' : 'Hide Past Chores'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* List ad-hoc chores */}
+            <View style={styles.dayCard}>
+              {(() => {
+                const todayStr = formatDate(new Date());
+                const adHocChores = chores.filter(c => c.scheduled_date !== null && c.scheduled_date !== undefined);
+                const filteredChores = showPastChores 
+                  ? adHocChores 
+                  : adHocChores.filter(c => c.scheduled_date! > todayStr);
+                
+                return filteredChores.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyEmoji}>📝</Text>
+                    <Text style={styles.emptyText}>
+                      {showPastChores ? 'No ad-hoc chores' : 'No upcoming ad-hoc chores'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => router.push('/(app)/parent/create-chore')}
+                      style={styles.addChoreLink}
+                    >
+                      <Text style={styles.addChoreLinkText}>+ Add an ad-hoc chore</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.choresContainer}>
+                    {filteredChores.map((chore) => (
+                      <PremiumCard
+                        key={chore.id}
+                        style={styles.choreCard}
+                        onPress={() => {
+                          router.push({
+                            pathname: '/(app)/parent/create-chore',
+                            params: { choreId: chore.id, edit: 'true' },
+                          });
+                        }}
+                      >
+                        <View style={styles.choreLeft}>
+                          <View style={styles.choreEmoji}>
+                            <Text style={styles.choreEmojiText}>{chore.emoji}</Text>
+                          </View>
+                          <View style={styles.choreInfo}>
+                            <Text style={styles.choreTitle}>{chore.title}</Text>
+                            <View style={styles.choreMetaRow}>
+                              <View style={styles.childBadge}>
+                                <Text style={styles.childEmoji}>{getChildEmoji(chore.assigned_to)}</Text>
+                                <Text style={styles.choreChild}>{getChildName(chore.assigned_to)}</Text>
+                              </View>
+                              <View style={styles.chorePoints}>
+                                <Text style={styles.chorePointsText}>{chore.points} pts</Text>
+                              </View>
+                            </View>
+                            {chore.scheduled_date && (
+                              <View style={styles.scheduledDateBadge}>
+                                <Ionicons name="calendar" size={14} color="#10B981" />
+                                <Text style={styles.scheduledDateText}>
+                                  {parseDateStringLocal(chore.scheduled_date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: parseDateStringLocal(chore.scheduled_date).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+                                  })}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                        <View style={styles.choreActions}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setChoreToDelete(chore.id);
+                              setDeleteConfirmVisible(true);
+                            }}
+                            style={styles.deleteButton}
+                          >
+                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                          </TouchableOpacity>
+                          <Ionicons name="chevron-forward" size={22} color="#10B981" />
+                        </View>
+                      </PremiumCard>
+                    ))}
+                  </View>
+                );
+              })()}
             </View>
           </>
         ) : (
@@ -591,7 +722,7 @@ export default function ParentChores() {
         )}
 
         {/* Quick Add Button */}
-        {activeTab === 'schedule' && (
+        {activeTab !== 'history' && (
           <TouchableOpacity
             onPress={() => router.push('/(app)/parent/create-chore')}
             style={styles.floatingAddButton}
@@ -685,25 +816,34 @@ const styles = StyleSheet.create({
   // ===== TAB SELECTOR =====
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 16,
-    padding: 4,
+    padding: 3,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 3,
+    paddingVertical: 10,
     borderRadius: 12,
+    flexWrap: 'nowrap',
   },
   tabActive: {
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.7)',
   },
   tabTextActive: {
@@ -1098,6 +1238,22 @@ const styles = StyleSheet.create({
   chorePointsTextApproved: {
     color: '#10B981',
   },
+  scheduledDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  scheduledDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#10B981',
+  },
   repeatDays: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1161,5 +1317,36 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+
+  // ===== FILTER BUTTON =====
+  filterButtonContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    marginTop: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(143, 146, 161, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(143, 146, 161, 0.15)',
+  },
+  filterButtonActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8F92A1',
+  },
+  filterButtonTextActive: {
+    color: '#10B981',
+    fontWeight: '700',
   },
 });

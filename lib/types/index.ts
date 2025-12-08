@@ -39,6 +39,10 @@ export interface Chore {
   points: number;
   emoji: string;
   repeating_days: string[];
+  scheduled_date: string | null;
+  recurrence_type: 'weekly' | 'biweekly' | 'monthly' | null;
+  recurrence_interval: number | null;
+  recurrence_day_of_month: number | null;
   created_at: string;
   updated_at: string;
 }

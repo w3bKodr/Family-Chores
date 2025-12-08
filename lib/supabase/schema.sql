@@ -122,6 +122,14 @@ CREATE TABLE IF NOT EXISTS public.chores (
   points INTEGER NOT NULL DEFAULT 0,
   emoji TEXT NOT NULL DEFAULT '✓',
   repeating_days TEXT[] DEFAULT ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+  -- For one-off/ad-hoc chores
+  scheduled_date DATE DEFAULT NULL,
+  -- Recurrence metadata: 'weekly' | 'biweekly' | 'monthly'
+  recurrence_type TEXT DEFAULT NULL,
+  -- Interval for recurrence (1 = weekly, 2 = biweekly, etc.)
+  recurrence_interval INTEGER DEFAULT NULL,
+  -- Day of month for monthly recurrence (1..31)
+  recurrence_day_of_month INTEGER DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT fk_family FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
@@ -629,6 +637,7 @@ CREATE INDEX IF NOT EXISTS idx_parent_join_requests_user_id ON public.parent_joi
 CREATE INDEX IF NOT EXISTS idx_parent_join_requests_status ON public.parent_join_requests(status);
 CREATE INDEX IF NOT EXISTS idx_chores_family_id ON public.chores(family_id);
 CREATE INDEX IF NOT EXISTS idx_chores_assigned_to ON public.chores(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_chores_scheduled_date ON public.chores(scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_chore_completions_chore_id ON public.chore_completions(chore_id);
 CREATE INDEX IF NOT EXISTS idx_chore_completions_completed_by ON public.chore_completions(completed_by);
 CREATE INDEX IF NOT EXISTS idx_chore_completions_completed_date ON public.chore_completions(completed_date);

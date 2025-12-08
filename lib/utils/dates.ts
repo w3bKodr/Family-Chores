@@ -26,8 +26,41 @@ export function generateFamilyCode(): string {
   return Math.random().toString(36).substr(2, 6).toUpperCase();
 }
 
+/**
+ * Parse a date string (YYYY-MM-DD) as local date, not UTC
+ * This prevents timezone offset issues where "2025-12-07" becomes Dec 6
+ */
+export function parseDateStringLocal(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0); // Noon to avoid timezone edge cases
+}
+
+/**
+ * Get user's timezone offset in minutes
+ */
+export function getTimezoneOffset(): number {
+  return new Date().getTimezoneOffset();
+}
+
+/**
+ * Get user's timezone name (e.g., "America/New_York")
+ */
+export function getTimezoneName(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (e) {
+    return 'UTC';
+  }
+}
+
 export function formatDate(date: string | Date): string {
-  const d = new Date(date);
+  let d: Date;
+  if (typeof date === 'string') {
+    // Parse date string in local timezone
+    d = parseDateStringLocal(date);
+  } else {
+    d = date;
+  }
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -36,7 +69,13 @@ export function formatDate(date: string | Date): string {
 }
 
 export function formatDateShort(date: string | Date): string {
-  const d = new Date(date);
+  let d: Date;
+  if (typeof date === 'string') {
+    // Parse date string in local timezone
+    d = parseDateStringLocal(date);
+  } else {
+    d = date;
+  }
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

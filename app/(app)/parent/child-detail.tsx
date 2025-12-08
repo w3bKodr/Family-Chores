@@ -274,10 +274,16 @@ export default function ChildDetail() {
   const getChoresForDay = (day: string) => {
     if (!child) return [];
     
-    // Get chores assigned to this child that have this day in repeating_days
+    // Get the date in YYYY-MM-DD format for this day
+    const targetDate = getDateForDay(day);
+    const targetDateStr = formatDateLocal(targetDate);
+    
+    // Get chores assigned to this child that either:
+    // 1. Have this day in repeating_days (recurring chores)
+    // 2. Have a scheduled_date matching this date (ad-hoc chores)
     return chores.filter(chore => 
       chore.assigned_to === childId && 
-      chore.repeating_days?.includes(day)
+      (chore.repeating_days?.includes(day) || chore.scheduled_date === targetDateStr)
     );
   };
 

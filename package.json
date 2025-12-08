@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "latest",
+    "@react-native-community/datetimepicker": "github:react-native-community/datetimepicker",
     "@supabase/supabase-js": "latest",
     "axios": "latest",
     "clsx": "latest",

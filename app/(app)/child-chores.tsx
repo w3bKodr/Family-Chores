@@ -205,10 +205,6 @@ export default function ChildChoresScreen() {
     }
   };
 
-  const todayChores = child ? chores.filter(
-    (c) => c.assigned_to === child.id && c.repeating_days?.includes(selectedDay)
-  ) : [];
-
   const isToday = selectedDay === today;
 
   // Get the start of the current week (Monday) in local timezone
@@ -238,6 +234,15 @@ export default function ChildChoresScreen() {
   };
 
   const selectedDate = isToday ? todayDate : getDateForDay(selectedDay);
+
+  const todayChores = child ? chores.filter(
+    (c) => {
+      const isAssignedToChild = c.assigned_to === child.id;
+      const isRepeatingOnDay = c.repeating_days?.includes(selectedDay);
+      const isScheduledForDate = c.scheduled_date === selectedDate;
+      return isAssignedToChild && (isRepeatingOnDay || isScheduledForDate);
+    }
+  ) : [];
 
   const completedChores = choreCompletions.filter(
     (cc) => cc.completed_date === selectedDate && cc.status === 'approved'
@@ -277,11 +282,17 @@ export default function ChildChoresScreen() {
           <View style={styles.daySelectorCard}>
             <View style={styles.dayButtonsRow}>
               {DAYS.map((day) => {
-                const dayChores = child ? chores.filter(
-                  (c) => c.assigned_to === child.id && c.repeating_days?.includes(day)
-                ) : [];
                 const isSelected = selectedDay === day;
                 const isDayToday = day === today;
+                const dayDate = isSelected ? selectedDate : getDateForDay(day);
+                const dayChores = child ? chores.filter(
+                  (c) => {
+                    const isAssignedToChild = c.assigned_to === child.id;
+                    const isRepeatingOnDay = c.repeating_days?.includes(day);
+                    const isScheduledForDate = c.scheduled_date === dayDate;
+                    return isAssignedToChild && (isRepeatingOnDay || isScheduledForDate);
+                  }
+                ) : [];
                 
                 return (
                   <Pressable

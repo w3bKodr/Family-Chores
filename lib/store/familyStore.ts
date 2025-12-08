@@ -327,7 +327,7 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('chores')
-        .select('*')
+        .select('*, scheduled_date, recurrence_type, recurrence_interval, recurrence_day_of_month')
         .eq('family_id', familyId);
 
       if (error) throw error;
@@ -345,7 +345,7 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       const { data, error } = await supabase
         .from('chores')
         .insert(chore)
-        .select()
+        .select('*, scheduled_date, recurrence_type, recurrence_interval, recurrence_day_of_month')
         .single();
 
       if (error) throw error;
@@ -360,15 +360,17 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
   updateChore: async (choreId: string, updates) => {
     set({ error: null });
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('chores')
         .update(updates)
-        .eq('id', choreId);
+        .eq('id', choreId)
+        .select('*, scheduled_date, recurrence_type, recurrence_interval, recurrence_day_of_month')
+        .single();
 
       if (error) throw error;
 
       const { chores } = get();
-      const updated = chores.map(c => c.id === choreId ? { ...c, ...updates } : c);
+      const updated = chores.map(c => c.id === choreId ? data : c);
       set({ chores: updated });
     } catch (error: any) {
       set({ error: error.message });
