@@ -19,7 +19,15 @@ import { AlertModal } from '@components/AlertModal';
 import { useFamilyStore } from '@lib/store/familyStore';
 
 // Premium Card with press animation
-const PremiumCard = ({ children, style, onPress }: { children: React.ReactNode; style?: any; onPress?: () => void }) => {
+const PremiumCard = ({
+  children,
+  style,
+  onPress,
+}: {
+  children: React.ReactNode;
+  style?: any;
+  onPress?: () => void;
+}) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -69,7 +77,7 @@ export default function JoinFamily() {
     title: string,
     message: string,
     type: 'success' | 'error' | 'info' = 'info',
-    onCloseAction: (() => void) | null = null,
+    onCloseAction: (() => void) | null = null
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -92,29 +100,38 @@ export default function JoinFamily() {
     setLoading(true);
     try {
       const trimmedCode = familyCode.trim();
-      
-      console.log('Looking for family with code:', trimmedCode);
-      
-      // First, let's see ALL families to debug
-      const { data: allFamilies, error: allError } = await supabase
-        .from('families')
-        .select('*');
-      
-      console.log('All families in database:', allFamilies);
-      
-      if (allFamilies && allFamilies.length === 0) {
-        showAlert('Error', 'No families exist yet. Ask the organizer to create a family first.', 'error');
-        setLoading(false);
-        return;
-      }
-      
-      // Query for family_code field (try exact match first, then case-insensitive)
-      const { data: families, error: familyError } = await supabase
-        .from('families')
-        .select('*')
-        .eq('family_code', trimmedCode);
+      // Family codes are generated in uppercase; normalize input to uppercase to match
+      const searchCode = trimmedCode.toUpperCase();
 
-      console.log('Query result:', { families, familyError });
+      console.log('Looking for family with code:', searchCode);
+
+      // Production-safe lookup: call a SECURITY DEFINER RPC that returns the
+      // family row for a given code. This avoids relaxing RLS policies while
+      // still allowing the app to look up a family by code.
+      //
+      // Admin SQL to create the RPC (run once in Supabase SQL editor):
+      //
+      // CREATE OR REPLACE FUNCTION public.find_family_by_code(p_code text)
+      // RETURNS TABLE(id uuid, name text, family_code text, parent_id uuid)
+      // LANGUAGE sql STABLE SECURITY DEFINER
+      // AS $$
+      //   SELECT id, name, family_code, parent_id
+      //   FROM public.families
+      //   WHERE family_code = upper(p_code)
+      //   LIMIT 1;
+      // $$;
+      //
+      // GRANT EXECUTE ON FUNCTION public.find_family_by_code(text) TO authenticated;
+      // (Optionally grant to anon if you want unauthenticated lookups.)
+
+      const { data: rpcData, error: rpcError } = await supabase.rpc('find_family_by_code', {
+        p_code: searchCode,
+      });
+
+      const families = (rpcData as any) || null;
+      const familyError = rpcError as any;
+
+      console.log('Query result (rpc):', { families, familyError });
 
       if (familyError) {
         console.error('Query error:', familyError);
@@ -122,7 +139,11 @@ export default function JoinFamily() {
       }
 
       if (!families || families.length === 0) {
-        showAlert('Error', `Family code "${trimmedCode}" not found. Please check the code and try again.`, 'error');
+        showAlert(
+          'Error',
+          `Family code "${trimmedCode}" not found. Please check the code and try again.`,
+          'error'
+        );
         setLoading(false);
         return;
       }
@@ -154,12 +175,15 @@ export default function JoinFamily() {
 
       // For parents, create or update a join request (allows re-requesting)
       if (user.role === 'parent') {
-        const { data, error: requestError } = await supabase.rpc('create_or_update_parent_join_request', {
-          p_family_id: family.id,
-          p_user_id: user.id,
-          p_display_name: user.display_name,
-          p_user_email: user.email,
-        });
+        const { data, error: requestError } = await supabase.rpc(
+          'create_or_update_parent_join_request',
+          {
+            p_family_id: family.id,
+            p_user_id: user.id,
+            p_display_name: user.display_name,
+            p_user_email: user.email,
+          }
+        );
 
         if (requestError) {
           console.error('Parent join request error:', requestError);
@@ -198,13 +222,11 @@ export default function JoinFamily() {
 
       // Only create child record if user is a child role
       if (user.role === 'child') {
-        const { error: childError } = await supabase
-          .from('children')
-          .insert({
-            family_id: family.id,
-            user_id: user.id,
-            display_name: user.display_name,
-          });
+        const { error: childError } = await supabase.from('children').insert({
+          family_id: family.id,
+          user_id: user.id,
+          display_name: user.display_name,
+        });
 
         if (childError) {
           console.error('Child insert error:', childError);
@@ -216,7 +238,9 @@ export default function JoinFamily() {
       setUser({ ...user, family_id: family.id });
 
       // Let the user dismiss the confirmation before navigating to dashboard
-      showAlert('Success', `You've joined ${family.name}!`, 'success', () => router.replace('/(app)/parent'));
+      showAlert('Success', `You've joined ${family.name}!`, 'success', () =>
+        router.replace('/(app)/parent')
+      );
     } catch (error: any) {
       console.error('Join family error:', error);
       showAlert('Error', error.message || 'Failed to join family', 'error');
@@ -230,17 +254,12 @@ export default function JoinFamily() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.iconCircle}>
-            <LinearGradient
-              colors={['#FF6B35', '#FF8F5A']}
-              style={styles.iconGradient}
-            >
+            <LinearGradient colors={['#FF6B35', '#FF8F5A']} style={styles.iconGradient}>
               <Text style={styles.icon}>🏡</Text>
             </LinearGradient>
           </View>
           <Text style={styles.title}>Join a Family</Text>
-          <Text style={styles.subtitle}>
-            Enter the family code shared by the family organizer
-          </Text>
+          <Text style={styles.subtitle}>Enter the family code shared by the family organizer</Text>
         </View>
 
         <View style={styles.form}>
@@ -257,7 +276,8 @@ export default function JoinFamily() {
             <View style={styles.infoBox}>
               <Text style={styles.infoEmoji}>💡</Text>
               <Text style={styles.infoText}>
-                Ask your family organizer to share their family code. You can find it on their dashboard.
+                Ask your family organizer to share their family code. You can find it on their
+                dashboard.
               </Text>
             </View>
           </PremiumCard>
@@ -270,12 +290,7 @@ export default function JoinFamily() {
             size="lg"
           />
 
-          <Button
-            title="Cancel"
-            onPress={() => router.back()}
-            variant="ghost"
-            size="lg"
-          />
+          <Button title="Cancel" onPress={() => router.back()} variant="ghost" size="lg" />
         </View>
       </ScrollView>
 

@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS public.children (
   emoji TEXT NOT NULL DEFAULT '👶',
   points INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'rejected')),
+  "order" INTEGER DEFAULT 0,
   joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT fk_family FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
@@ -620,6 +621,7 @@ CREATE INDEX IF NOT EXISTS idx_families_parent_id ON public.families(parent_id);
 CREATE INDEX IF NOT EXISTS idx_families_family_code ON public.families(family_code);
 CREATE INDEX IF NOT EXISTS idx_children_family_id ON public.children(family_id);
 CREATE INDEX IF NOT EXISTS idx_children_user_id ON public.children(user_id);
+CREATE INDEX IF NOT EXISTS idx_children_family_order ON public.children(family_id, "order");
 CREATE INDEX IF NOT EXISTS idx_join_requests_family_id ON public.join_requests(family_id);
 CREATE INDEX IF NOT EXISTS idx_join_requests_user_id ON public.join_requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_parent_join_requests_family_id ON public.parent_join_requests(family_id);

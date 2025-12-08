@@ -28,6 +28,7 @@ interface FamilyState {
   updateChild: (childId: string, updates: Partial<Child>) => Promise<void>;
   approveChild: (childId: string) => Promise<void>;
   rejectChild: (childId: string) => Promise<void>;
+  reorderChildren: (familyId: string, childId: string, newOrder: number) => Promise<void>;
   
   // Chore actions
   getChores: (familyId: string) => Promise<void>;
@@ -163,7 +164,8 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
         .from('children')
         .select('*')
         .eq('family_id', familyId)
-        .eq('status', 'approved');
+        .eq('status', 'approved')
+        .order('order', { ascending: true });
 
       if (error) throw error;
       set({ children: data || [] });
@@ -271,6 +273,49 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
       const { children } = get();
       const updated = children.filter(c => c.id !== childId);
       set({ children: updated });
+    } catch (error: any) {
+      set({ error: error.message });
+      throw error;
+    }
+  },
+
+  reorderChildren: async (familyId: string, childId: string, newOrder: number) => {
+    set({ error: null });
+    try {
+      const { children } = get();
+      const currentOrder = children.find(c => c.id === childId)?.order ?? 0;
+
+      // Determine which direction we're moving and adjust other children
+      if (newOrder > currentOrder) {
+        // Moving down - shift children between currentOrder and newOrder up
+        const childrenInRange = children.filter(c => c.order! > currentOrder && c.order! <= newOrder);
+        for (const child of childrenInRange) {
+          await supabase
+            .from('children')
+            .update({ order: child.order! - 1 })
+            .eq('id', child.id);
+        }
+      } else if (newOrder < currentOrder) {
+        // Moving up - shift children between newOrder and currentOrder down
+        const childrenInRange = children.filter(c => c.order! >= newOrder && c.order! < currentOrder);
+        for (const child of childrenInRange) {
+          await supabase
+            .from('children')
+            .update({ order: child.order! + 1 })
+            .eq('id', child.id);
+        }
+      }
+
+      // Update the moved child's order
+      const { error } = await supabase
+        .from('children')
+        .update({ order: newOrder })
+        .eq('id', childId);
+
+      if (error) throw error;
+
+      // Refresh children to maintain sorted state
+      await get().getChildren(familyId);
     } catch (error: any) {
       set({ error: error.message });
       throw error;

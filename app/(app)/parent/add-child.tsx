@@ -94,7 +94,7 @@ export default function AddChild() {
       await addChild(family.id, displayName.trim(), null, selectedEmoji);
       showAlert('Success', `${displayName} has been added to the family!`, 'success');
       setTimeout(() => {
-        router.back();
+        router.replace('/(app)/family/manage');
       }, 1500);
     } catch (error: any) {
       showAlert('Error', error.message, 'error');

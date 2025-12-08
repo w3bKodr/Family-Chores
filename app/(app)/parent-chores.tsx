@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamilyStore } from '@lib/store/familyStore';
 import { AlertModal } from '@components/AlertModal';
+import { ConfirmModal } from '@components/ConfirmModal';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SHORT_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -102,7 +103,7 @@ const PremiumCard = ({
 
 export default function ParentChores() {
   const router = useRouter();
-  const { chores, choreCompletions, children, getChores, getChoreCompletions, family } = useFamilyStore();
+  const { chores, choreCompletions, children, getChores, getChoreCompletions, family, deleteChore } = useFamilyStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'schedule' | 'history'>('schedule');
   const [selectedScheduleDay, setSelectedScheduleDay] = useState(getTodayIndex());
@@ -112,12 +113,28 @@ export default function ParentChores() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [choreToDelete, setChoreToDelete] = useState<string | null>(null);
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
     setAlertVisible(true);
+  };
+
+  const handleDeleteChore = async () => {
+    if (!choreToDelete || !family?.id) return;
+    
+    try {
+      await deleteChore(choreToDelete);
+      await getChores(family.id);
+      setDeleteConfirmVisible(false);
+      setChoreToDelete(null);
+      showAlert('Success', 'Chore deleted successfully!', 'success');
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+    }
   };
 
   useEffect(() => {
@@ -357,7 +374,18 @@ export default function ParentChores() {
                           )}
                         </View>
                       </View>
-                      <Ionicons name="chevron-forward" size={22} color="#10B981" />
+                      <View style={styles.choreActions}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setChoreToDelete(chore.id);
+                            setDeleteConfirmVisible(true);
+                          }}
+                          style={styles.deleteButton}
+                        >
+                          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                        <Ionicons name="chevron-forward" size={22} color="#10B981" />
+                      </View>
                     </PremiumCard>
                   ))}
                 </View>
@@ -587,6 +615,19 @@ export default function ParentChores() {
         message={alertMessage}
         type={alertType}
         onClose={() => setAlertVisible(false)}
+      />
+      <ConfirmModal
+        visible={deleteConfirmVisible}
+        title="Delete Chore?"
+        message="Are you sure you want to delete this chore? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        onConfirm={handleDeleteChore}
+        onClose={() => {
+          setDeleteConfirmVisible(false);
+          setChoreToDelete(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -950,6 +991,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 2,
     borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  choreActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   choreCardCompleted: {
     backgroundColor: 'rgba(16, 185, 129, 0.08)',

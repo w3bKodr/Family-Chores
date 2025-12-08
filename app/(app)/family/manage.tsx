@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
   Pressable,
+  PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -72,9 +73,128 @@ const PremiumCard = ({
   );
 };
 
+// Separate child card component so hooks are called in a stable order.
+const ChildCard = ({
+  child,
+  index,
+  reorderMode,
+  draggedItem,
+  setDraggedItem,
+  reorderedChildren,
+  handleDragStart,
+  handleDropOnChild,
+  router,
+}: any) => {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const isDragging = draggedItem === child.id;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => reorderMode,
+      onMoveShouldSetPanResponder: () => reorderMode && isDragging,
+      onPanResponderGrant: () => {
+        if (reorderMode) {
+          handleDragStart(child.id);
+        }
+      },
+      onPanResponderMove: isDragging
+        ? Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false })
+        : undefined,
+      onPanResponderRelease: (e, gesture) => {
+        if (!isDragging) return;
+
+        pan.flattenOffset();
+
+        // Calculate which position we're over
+        const cardWidth = 170;
+        const cardHeight = 180;
+        const offsetX = Math.round(gesture.dx / cardWidth);
+        const offsetY = Math.round(gesture.dy / cardHeight);
+
+        const cols = 2;
+        const currentRow = Math.floor(index / cols);
+        const currentCol = index % cols;
+
+        const newCol = Math.max(0, Math.min(1, currentCol + offsetX));
+        const newRow = Math.max(0, currentRow + offsetY);
+        const newIndex = Math.min(
+          reorderedChildren.length - 1,
+          Math.max(0, newRow * cols + newCol)
+        );
+
+        if (newIndex !== index) {
+          handleDropOnChild(index, newIndex);
+        }
+
+        setDraggedItem(null);
+
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Animated.View
+      style={[
+        styles.childCardWrapper,
+        isDragging && {
+          transform: [{ translateX: pan.x }, { translateY: pan.y }],
+          zIndex: 1000,
+        },
+      ]}
+      {...(reorderMode ? panResponder.panHandlers : {})}
+    >
+      <TouchableOpacity
+        onPress={() => {
+          if (reorderMode) {
+            if (!draggedItem) {
+              handleDragStart(child.id);
+            } else if (draggedItem === child.id) {
+              setDraggedItem(null);
+            } else {
+              const fromIndex = reorderedChildren.findIndex((c: any) => c.id === draggedItem);
+              const toIndex = index;
+              handleDropOnChild(fromIndex, toIndex);
+              setDraggedItem(null);
+            }
+          } else {
+            router.push({
+              pathname: '/(app)/parent/child-detail',
+              params: { childId: child.id, from: 'family' },
+            });
+          }
+        }}
+        style={[
+          styles.childCard,
+          isDragging && styles.childCardDragging,
+          reorderMode && !isDragging && draggedItem && styles.childCardDropTarget,
+        ]}
+        activeOpacity={reorderMode ? 1 : 0.7}
+      >
+        <View style={styles.childIcon}>
+          <Text style={styles.childEmoji}>{child.emoji || '👶'}</Text>
+        </View>
+        <Text style={styles.childName}>{child.display_name}</Text>
+        <View style={styles.pointsBadge}>
+          <Text style={styles.pointsText}>⭐ {child.points}</Text>
+        </View>
+
+        {reorderMode && !isDragging && draggedItem && (
+          <View style={styles.dropZoneOverlay}>
+            <Text style={styles.dropZoneText}>Drop here</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function ManageFamilyScreen() {
   const router = useRouter();
-  const { family, children, joinRequests, parentJoinRequests, getJoinRequests, getChildren, approveJoinRequest, rejectJoinRequest, getParentJoinRequests, approveParentJoinRequest, rejectParentJoinRequest, generateFamilyCode, setFamily, parents, getParents } = useFamilyStore();
+  const { family, children, joinRequests, parentJoinRequests, getJoinRequests, getChildren, approveJoinRequest, rejectJoinRequest, getParentJoinRequests, approveParentJoinRequest, rejectParentJoinRequest, generateFamilyCode, setFamily, parents, getParents, reorderChildren } = useFamilyStore();
   const { user, setUser } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
@@ -86,12 +206,74 @@ export default function ManageFamilyScreen() {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('info');
+  const [reorderMode, setReorderMode] = useState(false);
+  const [reorderedChildren, setReorderedChildren] = useState<any[]>([]);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [dragAnimValues] = useState(
+    new Map<string, Animated.Value>()
+  );
 
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'error') => {
     setAlertTitle(title);
     setAlertMessage(message);
     setAlertType(type);
     setAlertVisible(true);
+  };
+
+  const enterReorderMode = () => {
+    setReorderedChildren([...children]);
+    setReorderMode(true);
+  };
+
+  const handleDragStart = (childId: string) => {
+    setDraggedItem(childId);
+    const anim = dragAnimValues.get(childId) || new Animated.Value(0);
+    dragAnimValues.set(childId, anim);
+    
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const handleDragEnd = async () => {
+    if (!family?.id) return;
+    
+    try {
+      // Update all children with their new order positions
+      for (let i = 0; i < reorderedChildren.length; i++) {
+        const child = reorderedChildren[i];
+        if (child.order !== i) {
+          await reorderChildren(family.id, child.id, i);
+        }
+      }
+      
+      setReorderMode(false);
+      setDraggedItem(null);
+      setReorderedChildren([]);
+      dragAnimValues.clear();
+      await getChildren(family.id);
+      showAlert('Success', 'Child order updated!', 'success');
+    } catch (error: any) {
+      showAlert('Error', error.message, 'error');
+    }
+  };
+
+  const handleDropOnChild = (draggedIndex: number, targetIndex: number) => {
+    if (draggedIndex === targetIndex) return;
+    
+    const newOrder = [...reorderedChildren];
+    const [draggedChild] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedChild);
+    setReorderedChildren(newOrder);
+  };
+
+  const cancelReorder = () => {
+    setReorderMode(false);
+    setDraggedItem(null);
+    setReorderedChildren([]);
+    dragAnimValues.clear();
   };
 
   useEffect(() => {
@@ -481,36 +663,57 @@ export default function ManageFamilyScreen() {
               />
             </View>
           ) : (
-            <View style={styles.childrenGrid}>
-              {children.map((child) => (
+            <View>
+              {/* Reorder Mode Button/Controls */}
+              {!reorderMode ? (
                 <TouchableOpacity
-                  key={child.id}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/(app)/parent/child-detail',
-                      params: { childId: child.id, from: 'family' },
-                    })
-                  }
-                  style={styles.childCard}
+                  onPress={enterReorderMode}
+                  style={styles.reorderButton}
                 >
-                  <View style={styles.childIcon}>
-                    <Text style={styles.childEmoji}>{child.emoji || '👶'}</Text>
-                  </View>
-                  <Text style={styles.childName}>{child.display_name}</Text>
-                  <View style={styles.pointsBadge}>
-                    <Text style={styles.pointsText}>⭐ {child.points}</Text>
-                  </View>
+                  <Ionicons name="swap-vertical" size={20} color="#10B981" />
+                  <Text style={styles.reorderButtonText}>Reorder Children</Text>
                 </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                onPress={() => router.push('/(app)/parent/add-child')}
-                style={styles.addChildCard}
-              >
-                <View style={styles.addChildIcon}>
-                  <Text style={styles.addChildEmoji}>➕</Text>
+              ) : (
+                <View style={styles.reorderModeInfo}>
+                  <Text style={styles.reorderInfoText}>👆 Long press and drag to reorder</Text>
+                  <TouchableOpacity onPress={handleDragEnd} style={styles.saveButton}>
+                    <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={cancelReorder} style={styles.cancelButton}>
+                    <Ionicons name="close" size={18} color="#EF4444" />
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.addChildText}>Add Child</Text>
-              </TouchableOpacity>
+              )}
+
+              {/* Children Grid */}
+              <View style={styles.childrenGrid}>
+                {(reorderMode ? reorderedChildren : children).map((child, index) => (
+                  <ChildCard
+                    key={child.id}
+                    child={child}
+                    index={index}
+                    reorderMode={reorderMode}
+                    draggedItem={draggedItem}
+                    setDraggedItem={setDraggedItem}
+                    reorderedChildren={reorderedChildren}
+                    handleDragStart={handleDragStart}
+                    handleDropOnChild={handleDropOnChild}
+                    router={router}
+                  />
+                ))}
+                <TouchableOpacity
+                  onPress={() => !reorderMode && router.push('/(app)/parent/add-child')}
+                  style={[styles.addChildCard, reorderMode && styles.disabledCard]}
+                  disabled={reorderMode}
+                >
+                  <View style={styles.addChildIcon}>
+                    <Text style={styles.addChildEmoji}>➕</Text>
+                  </View>
+                  <Text style={styles.addChildText}>Add Child</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -998,7 +1201,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 24,
     padding: 20,
-    width: '47%',
+    width: '100%',
     alignItems: 'center',
     borderWidth: 0.5,
     borderColor: 'rgba(0, 0, 0, 0.05)',
@@ -1065,6 +1268,121 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#6B7280',
+  },
+
+  // Reorder Styles
+  reorderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    marginBottom: 16,
+    gap: 8,
+  },
+  reorderButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  reorderModeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    marginBottom: 16,
+    gap: 8,
+  },
+  reorderInfoText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#3B82F6',
+    flex: 1,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    gap: 4,
+  },
+  saveButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    gap: 4,
+  },
+  cancelButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  childCardWrapper: {
+    width: '47%',
+  },
+  childCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 24,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    shadowColor: 'rgba(0, 0, 0, 0.04)',
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 4,
+  },
+  childCardDragging: {
+    transform: [{ scale: 1.05 }],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+    borderColor: '#10B981',
+    borderWidth: 2,
+  },
+  dropZoneOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#10B981',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropZoneText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  disabledCard: {
+    opacity: 0.4,
   },
   
   // Invite Parent Card

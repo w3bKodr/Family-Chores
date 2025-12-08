@@ -27,6 +27,7 @@ export interface Child {
   points: number;
   status: 'pending' | 'approved' | 'rejected';
   joined_at: string;
+  order?: number; // For sorting children in UI
 }
 
 export interface Chore {

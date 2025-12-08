@@ -71,12 +71,12 @@ export default function CreateChore() {
   const router = useRouter();
   const { choreId, edit } = useLocalSearchParams<{ choreId?: string; edit?: string }>();
   const { user } = useAuthStore();
-  const { family, children, chores, createChore, updateChore, loading } = useFamilyStore();
+  const { family, children, chores, createChore, updateChore, deleteChore, loading } = useFamilyStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [points, setPoints] = useState('1');
   const [emoji, setEmoji] = useState('✓');
-  const [selectedChild, setSelectedChild] = useState<string | null>(null);
+  const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
@@ -103,7 +103,7 @@ export default function CreateChore() {
         setDescription(existingChore.description || '');
         setPoints(existingChore.points.toString());
         setEmoji(existingChore.emoji);
-        setSelectedChild(existingChore.assigned_to);
+        setSelectedChildren([existingChore.assigned_to]);
         setSelectedDays(existingChore.repeating_days);
       }
     } else {
@@ -112,7 +112,7 @@ export default function CreateChore() {
       setDescription('');
       setPoints('1');
       setEmoji('✓');
-      setSelectedChild(null);
+      setSelectedChildren([]);
       setSelectedDays([]);
     }
   }, [isEditMode, choreId, chores]);
@@ -125,6 +125,14 @@ export default function CreateChore() {
   };
 
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  const toggleChild = (childId: string) => {
+    if (selectedChildren.includes(childId)) {
+      setSelectedChildren(selectedChildren.filter(id => id !== childId));
+    } else {
+      setSelectedChildren([...selectedChildren, childId]);
+    }
+  };
 
   const toggleDay = (day: string) => {
     if (selectedDays.includes(day)) {
@@ -140,8 +148,8 @@ export default function CreateChore() {
       return;
     }
 
-    if (!selectedChild) {
-      showAlert('Error', 'Please select a child', 'error');
+    if (selectedChildren.length === 0) {
+      showAlert('Error', 'Please select at least one child', 'error');
       return;
     }
 
@@ -156,22 +164,60 @@ export default function CreateChore() {
     }
 
     try {
-      const choreData = {
-        family_id: family.id,
-        assigned_to: selectedChild,
-        title,
-        description: description || null,
-        points: parseInt(points, 10),
-        emoji,
-        repeating_days: selectedDays,
-      };
-
       if (isEditMode && choreId) {
+        // In edit mode, update the existing chore and create new ones for additional children
+        const existingChore = chores.find(c => c.id === choreId);
+        
+        // Update the original chore
+        const choreData = {
+          family_id: family.id,
+          assigned_to: existingChore?.assigned_to,
+          title,
+          description: description || null,
+          points: parseInt(points, 10),
+          emoji,
+          repeating_days: selectedDays,
+        };
         await updateChore(choreId, choreData);
+
+        // Find which children are newly added (not the original assignee)
+        const newlyAddedChildren = selectedChildren.filter(id => id !== existingChore?.assigned_to);
+        
+        // Create chores for newly added children only
+        if (newlyAddedChildren.length > 0) {
+          const chorePromises = newlyAddedChildren.map(childId =>
+            createChore({
+              family_id: family.id,
+              assigned_to: childId,
+              title,
+              description: description || null,
+              points: parseInt(points, 10),
+              emoji,
+              repeating_days: selectedDays,
+            })
+          );
+
+          await Promise.all(chorePromises);
+        }
+
         showAlert('Success', 'Chore updated successfully!', 'success');
       } else {
-        await createChore(choreData);
-        showAlert('Success', 'Chore created successfully!', 'success');
+        // In create mode, create a chore for each selected child
+        const chorePromises = selectedChildren.map(childId =>
+          createChore({
+            family_id: family.id,
+            assigned_to: childId,
+            title,
+            description: description || null,
+            points: parseInt(points, 10),
+            emoji,
+            repeating_days: selectedDays,
+          })
+        );
+
+        await Promise.all(chorePromises);
+        const childCount = selectedChildren.length;
+        showAlert('Success', `Chore created for ${childCount} ${childCount === 1 ? 'child' : 'children'}!`, 'success');
       }
 
       setTimeout(() => {
@@ -248,29 +294,29 @@ export default function CreateChore() {
             {children.map((child) => (
               <PremiumCard
                 key={child.id}
-                onPress={() => setSelectedChild(child.id)}
+                onPress={() => toggleChild(child.id)}
                 style={[
                   styles.childItem,
-                  selectedChild === child.id && styles.childItemSelected,
+                  selectedChildren.includes(child.id) && styles.childItemSelected,
                 ]}
               >
                 <View style={styles.childInfo}>
                   <View style={[
                     styles.childAvatar,
-                    selectedChild === child.id && styles.childAvatarSelected,
+                    selectedChildren.includes(child.id) && styles.childAvatarSelected,
                   ]}>
                     <Text style={styles.childAvatarEmoji}>{child.emoji || '👶'}</Text>
                   </View>
                   <Text
                     style={[
                       styles.childName,
-                      selectedChild === child.id && styles.childNameSelected,
+                      selectedChildren.includes(child.id) && styles.childNameSelected,
                     ]}
                   >
                     {child.display_name}
                   </Text>
                 </View>
-                {selectedChild === child.id && (
+                {selectedChildren.includes(child.id) && (
                   <Text style={styles.checkmark}>✓</Text>
                 )}
               </PremiumCard>
